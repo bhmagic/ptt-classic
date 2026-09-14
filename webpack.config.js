@@ -1,3 +1,4 @@
+// Modified for PTT Classic on 2026-09-14: keep integrated media previews opt-in.
 const path = require('path');
 const webpack = require('webpack');
 const UglifyJSPlugin = require('uglifyjs-webpack-plugin');

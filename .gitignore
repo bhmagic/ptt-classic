@@ -1,3 +1,4 @@
+# Modified for PTT Classic on 2026-09-14: exclude local caches and test results.
 node_modules
 .cache/
 test-results/

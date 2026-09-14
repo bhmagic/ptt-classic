@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "license": "GPL-2.0",
+  "license": "GPL-2.0-only",
+  "repository": { "type": "git", "url": "https://github.com/bhmagic/ptt-classic.git" },
   "engines": { "node": ">=22" },
   "packageManager": "pnpm@11.19.0",
   "scripts": {

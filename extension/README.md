@@ -1,6 +1,6 @@
 # PTT Classic for Chrome
 
-The classic PTT web terminal, packaged as a Manifest V3 extension with [mingc00/ptt-media-preview](https://github.com/mingc00/ptt-media-preview) 6.2.1 built in. Its interface starts from upstream commit `315fbbd4a901ac9e8ce487dddf901b84ed788fcc` (September 3, 2026), before the Canvas interface rewrite. The source is at [bhmagic/ptt-term](https://github.com/bhmagic/ptt-term).
+The classic PTT web terminal, packaged as a Manifest V3 extension with [mingc00/ptt-media-preview](https://github.com/mingc00/ptt-media-preview) 6.2.1 built in. Its interface starts from upstream commit `315fbbd4a901ac9e8ce487dddf901b84ed788fcc` (September 3, 2026), before the Canvas interface rewrite. The source is at [bhmagic/ptt-classic](https://github.com/bhmagic/ptt-classic).
 
 **Use the prepared folder**
 
@@ -51,4 +51,4 @@ The optional `pnpm --dir extension test:youtube-live` verifies that YouTube's pu
 
 The build currently reports three inherited warnings: duplicate font-size translation keys and an unreachable duplicate ANSI parser case. Their existing runtime behavior is preserved.
 
-The client retains its GNU GPL v2 license. The prepared folder includes `LICENSE`, bundled dependency notices, and the original cursor copyright notice. Source and build instructions are available in the linked public repository.
+The combined client retains its GNU GPL v2 license. The media-preview files keep their MIT license, and our independently written files listed in `ATTRIBUTION.md` are additionally available under MIT. These permissions do not make the complete application MIT-only. The prepared folder includes `LICENSE`, attribution, both MIT notices, bundled dependency notices, and the original cursor copyright notice. Source and build instructions are available in the linked public repository.

@@ -49,7 +49,7 @@ const result = await build({
     'PTTCHROME.NAME': '"PTT Classic"',
     'PTTCHROME.VERSION': JSON.stringify(`1.2.0 / extension ${manifest.version}`),
     'PTTCHROME.GITHUB_REPOSITORY_OWNER': '"bhmagic"',
-    'PTTCHROME.GITHUB_REPOSITORY': '"bhmagic/ptt-term"'
+    'PTTCHROME.GITHUB_REPOSITORY': '"bhmagic/ptt-classic"'
   },
   plugins: [{
     name: 'classic-icons',
@@ -118,6 +118,9 @@ await copyFile(path.join(extensionDir, 'background.js'), path.join(output, 'back
 await copyFile(path.join(extensionDir, 'README.md'), path.join(output, 'README.md'));
 await copyFile(path.join(root, 'src', 'icon', 'ptt.cc', 'icon_128.png'), path.join(output, 'icon.png'));
 await copyFile(path.join(root, 'LICENSE'), path.join(output, 'LICENSE'));
+await copyFile(path.join(root, 'ATTRIBUTION.md'), path.join(output, 'ATTRIBUTION.md'));
+await mkdir(path.join(output, 'LICENSES'), { recursive: true });
+await copyFile(path.join(root, 'LICENSES', 'MIT-PTT-Classic.txt'), path.join(output, 'LICENSES', 'MIT-PTT-Classic.txt'));
 await copyFile(path.join(extensionDir, 'vendor', 'ptt-media-preview', 'LICENSE'), path.join(output, 'MEDIA-PREVIEW-LICENSE.txt'));
 await copyFile(path.join(extensionDir, 'vendor', 'ptt-media-preview', 'UPSTREAM.json'), path.join(output, 'MEDIA-PREVIEW-UPSTREAM.json'));
 await copyFile(path.join(root, 'src', 'cursor', 'COPYRIGHT.txt'), path.join(output, 'CURSOR-COPYRIGHT.txt'));

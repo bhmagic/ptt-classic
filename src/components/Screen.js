@@ -1,3 +1,4 @@
+// Modified for PTT Classic on 2026-09-14: avoid duplicate hover image loading.
 import Row from "./Row";
 import ImagePreviewer, {
   of,
