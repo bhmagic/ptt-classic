@@ -1,0 +1,33 @@
+{
+  "name": "ptt-classic-extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "GPL-2.0",
+  "engines": { "node": ">=22" },
+  "packageManager": "pnpm@11.19.0",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node --test test/package.test.mjs",
+    "test:browser": "node test/browser.mjs",
+    "test:live": "node test/browser.mjs --live",
+    "test:youtube-live": "node test/youtube-live.mjs"
+  },
+  "dependencies": {
+    "base58": "2.0.1",
+    "bootstrap": "3.4.1",
+    "classnames": "2.5.1",
+    "hammerjs": "2.0.8",
+    "jquery": "3.7.1",
+    "querystring-es3": "0.2.1",
+    "react": "16.14.0",
+    "react-bootstrap": "0.33.1",
+    "react-dom": "16.14.0",
+    "react-overlays": "5.2.1",
+    "recompose": "0.30.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "playwright": "1.62.1"
+  }
+}

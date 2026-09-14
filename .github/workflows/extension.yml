@@ -1,0 +1,46 @@
+name: Build PTT Classic extension
+
+on:
+  push:
+    branches: [codex/classic]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  extension:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+      - name: Install pinned extension dependencies
+        run: pnpm --dir extension install --frozen-lockfile --ignore-scripts
+      - name: Build and validate the unpacked folder
+        run: |
+          pnpm --dir extension build
+          pnpm --dir extension test
+      - name: Install isolated test browser
+        run: pnpm --dir extension exec playwright install --with-deps chromium
+      - name: Test without connecting to PTT
+        run: pnpm --dir extension test:browser
+      - name: Upload ready-to-load extension
+        uses: actions/upload-artifact@v4
+        with:
+          name: ptt-classic
+          path: dist/ptt-classic/
+          if-no-files-found: error
+      - name: Upload browser test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-test-results
+          path: test-results/
+          if-no-files-found: ignore

@@ -33,7 +33,7 @@ export class Screen extends React.Component {
   };
 
   handleHyperLinkMouseOver = ({ currentTarget: { href } }) => {
-    if (this.props.enableLinkHoverPreview) {
+    if (this.props.enableLinkHoverPreview && !process.env.PTTCHROME_MEDIA_PREVIEW) {
       this.setState({
         currentImagePreview: of(href)
           .then(resolveSrcToImageUrl)

@@ -1,5 +1,9 @@
 # ptt-term
 
+This fork's default branch, `codex/classic`, packages the September 3, 2026 classic client as **PTT Classic**, a local Chrome extension with a direct PTT connection. Start with the [extension installation and build instructions](extension/README.md). The ready-to-load build folder is `dist/ptt-classic`.
+
+The original project's documentation follows.
+
 An HTML5-based web client for connecting to ANSI terminal-based BBS sites.
 This repository contains the source code running behind
 [term.ptt.cc](https://term.ptt.cc/) and [term.ptt2.cc](https://term.ptt2.cc/).
