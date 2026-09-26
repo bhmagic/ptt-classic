@@ -93,15 +93,24 @@ try {
       otherPageImgurImage: await matches('https://i.imgur.com/test.png', 'https://example.com', 'image'),
       ownYoutubeEmbed: await matches('https://www.youtube.com/embed/M7lc1UVf-VE', location.origin, 'sub_frame'),
       otherPageYoutubeEmbed: await matches('https://www.youtube.com/embed/M7lc1UVf-VE', 'https://example.com', 'sub_frame'),
-      youtubeTopLevel: await matches('https://www.youtube.com/embed/M7lc1UVf-VE', location.origin, 'main_frame')
+      youtubeTopLevel: await matches('https://www.youtube.com/embed/M7lc1UVf-VE', location.origin, 'main_frame'),
+      ownVerbImage: await matches('https://i.verb.tw/test.jpg', location.origin, 'image'),
+      otherPageVerbImage: await matches('https://i.verb.tw/test.jpg', 'https://example.com', 'image'),
+      verbTopLevel: await matches('https://i.verb.tw/test.jpg', location.origin, 'main_frame'),
+      verbFetch: await matches('https://i.verb.tw/test.jpg', location.origin, 'xmlhttprequest'),
+      verbOtherHost: await matches('https://img.verb.tw/test.jpg', location.origin, 'image'),
+      verbLookalike: await matches('https://i.verb.tw.example.com/test.jpg', location.origin, 'image'),
+      verbHttp: await matches('http://i.verb.tw/test.jpg', location.origin, 'image')
     };
   });
   assert.equal(scope.ownConnection, 1);
   assert.equal(scope.officialPage + scope.anotherWebsite + scope.differentEndpoint + scope.lookalikeDomain, 0);
   assert.equal(scope.ownImgurImage, 1);
   assert.equal(scope.ownYoutubeEmbed, 1);
+  assert.equal(scope.ownVerbImage, 1);
+  assert.equal(scope.otherPageVerbImage + scope.verbTopLevel + scope.verbFetch + scope.verbOtherHost + scope.verbLookalike + scope.verbHttp, 0);
   assert.equal(scope.otherPageImgurImage + scope.otherPageYoutubeEmbed + scope.youtubeTopLevel, 0);
-  assert.deepEqual([...scope.permissions.origins].sort(), ['https://*.imgur.com/*', 'https://www.youtube.com/*', 'wss://ws.ptt.cc/*']);
+  assert.deepEqual([...scope.permissions.origins].sort(), ['https://*.imgur.com/*', 'https://i.verb.tw/*', 'https://www.youtube.com/*', 'wss://ws.ptt.cc/*']);
   await page.locator('#BBSWindow').waitFor({ state: 'visible' });
   if (live) {
     await page.waitForFunction(() => document.body.textContent.includes('請輸入代號'), null, { timeout: 20000 }).catch(async error => {

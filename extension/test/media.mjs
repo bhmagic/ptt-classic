@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 export async function exerciseMedia(page, send, results) {
   const imageRequests = [];
   const image = '<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000"><rect width="1600" height="1000" fill="#267b92"/><text x="100" y="200" font-size="90" fill="white">Media preview fixture</text></svg>';
-  await page.route(/^https:\/\/(i\.imgur\.com|i\.meee\.com\.tw)\//, route => {
+  await page.route(/^https:\/\/(i\.imgur\.com|i\.meee\.com\.tw|i\.verb\.tw)\//, route => {
     const url = route.request().url();
     imageRequests.push(url);
     if (url === 'https://i.meee.com.tw/fixture.jpg') {
@@ -21,7 +21,7 @@ export async function exerciseMedia(page, send, results) {
   await page.route(/^https:\/\/(www\.youtube\.com|clips\.twitch\.tv)\//, route =>
     route.fulfill({ contentType: 'text/html', body: '<p>Embedded player fixture</p>' }));
 
-  send('\x1b[2J\x1b[Hhttps://i.imgur.com/fixture.jpg\r\nhttps://meee.com.tw/fixture\r\nhttps://imgur.com/a/album123\r\nhttps://imgur.com/unknown123\r\n');
+  send('\x1b[2J\x1b[Hhttps://i.imgur.com/fixture.jpg\r\nhttps://meee.com.tw/fixture\r\nhttps://imgur.com/a/album123\r\nhttps://imgur.com/unknown123\r\nhttps://i.verb.tw/fixture.jpg\r\n');
   const container = page.locator('#mainContainer');
   await page.locator('[data-ptt-media-preview-container]').waitFor();
   const preview = page.locator('img[data-ptt-media-preview-fallback]');
@@ -29,7 +29,8 @@ export async function exerciseMedia(page, send, results) {
     ['https://i.imgur.com/fixture.jpg', 'https://i.imgur.com/fixture.jpg'],
     ['https://meee.com.tw/fixture', 'https://i.meee.com.tw/fixture.png'],
     ['https://imgur.com/a/album123', 'https://i.imgur.com/album-first.jpg'],
-    ['https://imgur.com/unknown123', 'https://i.imgur.com/resolved-image.png']
+    ['https://imgur.com/unknown123', 'https://i.imgur.com/resolved-image.png'],
+    ['https://i.verb.tw/fixture.jpg', 'https://i.verb.tw/fixture.jpg']
   ]) {
     await container.locator(`a[href="${href}"]`).hover();
     await page.waitForFunction(src => {
@@ -73,6 +74,7 @@ export async function exerciseMedia(page, send, results) {
     main.append(marker);
     for (const [id, href] of [
       ['image', 'https://i.imgur.com/inline.jpg'],
+      ['verb', 'https://i.verb.tw/inline.jpg'],
       ['album', 'https://imgur.com/a/album123'],
       ['youtube', 'https://youtu.be/M7lc1UVf-VE?t=45'],
       ['twitch', 'https://clips.twitch.tv/IncredulousAbstemiousFennelImGlitch']
@@ -88,6 +90,10 @@ export async function exerciseMedia(page, send, results) {
     }
   });
   await page.locator('[data-test-preview="image"] img').waitFor();
+  await page.waitForFunction(() => {
+    const image = document.querySelector('[data-test-preview="verb"] img');
+    return image?.complete && image.naturalWidth > 0;
+  });
   await page.locator('[data-test-preview="album"] video').waitFor();
   assert.equal(await page.locator('[data-test-preview="album"] img').count(), 1);
   const youtube = page.locator('[data-test-preview="youtube"] iframe');
@@ -99,5 +105,5 @@ export async function exerciseMedia(page, send, results) {
   assert.equal(await twitch.getAttribute('target'), '_blank');
   assert.equal(await page.locator('[data-test-preview="twitch"] iframe').count(), 0);
   assert.equal(await youtube.getAttribute('loading'), 'lazy');
-  return { imageHover: true, meeeFallback: true, imgurAlbum: true, imgurUnknown: true, stalePreviewCleanup: true, inlineImage: true, albumVideo: true, youtubeElement: true, twitchLink: true };
+  return { imageHover: true, verbHover: true, verbInline: true, meeeFallback: true, imgurAlbum: true, imgurUnknown: true, stalePreviewCleanup: true, inlineImage: true, albumVideo: true, youtubeElement: true, twitchLink: true };
 }

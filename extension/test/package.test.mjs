@@ -48,10 +48,10 @@ test('the bookmark identity is fixed by the packaged public key', () => {
 
 test('the connection permission and Origin rule cannot affect arbitrary sites', async () => {
   assert.equal(manifest.manifest_version, 3);
-  assert.deepEqual(manifest.host_permissions, ['wss://ws.ptt.cc/*', 'https://*.imgur.com/*', 'https://www.youtube.com/*']);
+  assert.deepEqual(manifest.host_permissions, ['wss://ws.ptt.cc/*', 'https://*.imgur.com/*', 'https://www.youtube.com/*', 'https://i.verb.tw/*']);
   assert.deepEqual([...manifest.permissions].sort(), ['clipboardRead', 'clipboardWrite', 'declarativeNetRequestWithHostAccess']);
   const rules = JSON.parse(await read('rules.json'));
-  assert.equal(rules.length, 3);
+  assert.equal(rules.length, 4);
   assert.deepEqual(rules[0].condition.initiatorDomains, [buildInfo.extensionId]);
   assert.equal(rules[0].condition.urlFilter, '|wss://ws.ptt.cc/bbs|');
   assert.deepEqual(rules[0].condition.resourceTypes, ['websocket']);
@@ -64,4 +64,8 @@ test('the connection permission and Origin rule cannot affect arbitrary sites', 
   assert.deepEqual(rules[2].condition.initiatorDomains, [buildInfo.extensionId]);
   assert.deepEqual(rules[2].condition.resourceTypes, ['sub_frame']);
   assert.equal(rules[2].condition.urlFilter, '|https://www.youtube.com/embed/');
+  assert.deepEqual(rules[3].condition.initiatorDomains, [buildInfo.extensionId]);
+  assert.deepEqual(rules[3].condition.resourceTypes, ['image']);
+  assert.equal(rules[3].condition.urlFilter, '|https://i.verb.tw/');
+  assert.deepEqual(rules[3].action.requestHeaders, [{ header: 'Referer', operation: 'set', value: `https://ptt-classic.${buildInfo.extensionId}/` }]);
 });

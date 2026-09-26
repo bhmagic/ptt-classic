@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PTT Classic",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "The classic PTT terminal in a Chrome tab. Connects directly to PTT with a narrowly scoped Origin rule; no relay.",
   "minimum_chrome_version": "101",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAy2KMD/xU+qrj9wxPiDQTpTbKOoxot0czlKCYJP+DaGvIlN+mgJRpRgsXPemCoq/UqL4m3WaMJDeOR+WPoMN8rQ4VC0E5nwRYJkgKJ4OGVGLHAsmXuaRSys5KzO1D8VNyjFxIYUSFzDh7cwobhcow4kGTTmFH2OjdO2y5/w6S2kkhaR/VM2qFar10gsmQooZWRN7hXPGK2YoyTGYY3uY79oONqei4jyl8zsEMJmWWktrQfOlH1QlHGAjGkYeiCf2mWMM3rupcJCe7WUTGt3RgjVdBDVtnvkmZcFY7GnwFZcO1njVNj0S2tsJEUyyUbI+WVRVF3yHeqWajjmbYb7gBPQIDAQAB",
@@ -9,7 +9,7 @@
   "action": { "default_title": "Open PTT Classic", "default_icon": "icon.png" },
   "background": { "service_worker": "background.js" },
   "permissions": ["declarativeNetRequestWithHostAccess", "clipboardRead", "clipboardWrite"],
-  "host_permissions": ["wss://ws.ptt.cc/*", "https://*.imgur.com/*", "https://www.youtube.com/*"],
+  "host_permissions": ["wss://ws.ptt.cc/*", "https://*.imgur.com/*", "https://www.youtube.com/*", "https://i.verb.tw/*"],
   "declarative_net_request": {
     "rule_resources": [{ "id": "ptt_origin", "enabled": true, "path": "rules.json" }]
   },

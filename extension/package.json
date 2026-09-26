@@ -1,6 +1,6 @@
 {
   "name": "ptt-classic-extension",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "license": "GPL-2.0-only",
@@ -12,7 +12,8 @@
     "test": "node --test test/package.test.mjs",
     "test:browser": "node test/browser.mjs",
     "test:live": "node test/browser.mjs --live",
-    "test:youtube-live": "node test/youtube-live.mjs"
+    "test:youtube-live": "node test/youtube-live.mjs",
+    "test:verb-live": "node test/verb-live.mjs"
   },
   "dependencies": {
     "base58": "2.0.1",

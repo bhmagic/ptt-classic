@@ -1,6 +1,6 @@
 # Source origins, changes, and licenses
 
-PTT Classic preserves the work and attribution of its upstream contributors. This document describes the sources used for the initial extension and the changes made on September 14, 2026.
+PTT Classic preserves the work and attribution of its upstream contributors. This document describes the sources used for the initial extension on September 14, 2026, and subsequent integration changes.
 
 ## Terminal lineage
 
@@ -35,11 +35,13 @@ The local change to `term.js` opens Twitch clips in a new tab when running on a 
 
 ## Independently written additions
 
+On September 26, 2026, version 0.1.1 added an extension-scoped Referer rule for `i.verb.tw` images, using PTT Classic's own app identity, plus regression and optional live checks. The vendored preview code remains unchanged by this fix.
+
 The following files were written for PTT Classic and are additionally available under [MIT](LICENSES/MIT-PTT-Classic.txt):
 
 - `extension/background.js`, `extension/build.mjs`, `extension/client.js`, and `extension/globals.js`.
 - `extension/manifest.json` and `extension/package.json` (the package's license field describes the combined application).
-- `extension/test/browser.mjs`, `extension/test/media.mjs`, `extension/test/package.test.mjs`, and `extension/test/youtube-live.mjs`.
+- `extension/test/browser.mjs`, `extension/test/media.mjs`, `extension/test/package.test.mjs`, `extension/test/youtube-live.mjs`, and `extension/test/verb-live.mjs`.
 - `.github/workflows/extension.yml`.
 - The PTT Classic project documentation: `README.md`, `ATTRIBUTION.md`, and `extension/README.md`.
 

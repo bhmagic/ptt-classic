@@ -110,6 +110,19 @@ const rules = [{
     resourceTypes: ['sub_frame'],
     initiatorDomains: [id]
   }
+}, {
+  id: 4,
+  priority: 1,
+  action: {
+    type: 'modifyHeaders',
+    // i.verb.tw requires a Referer for browser images; extension pages omit it.
+    requestHeaders: [{ header: 'Referer', operation: 'set', value: `https://ptt-classic.${id}/` }]
+  },
+  condition: {
+    urlFilter: '|https://i.verb.tw/',
+    resourceTypes: ['image'],
+    initiatorDomains: [id]
+  }
 }];
 await writeFile(path.join(output, 'index.html'), html);
 await writeFile(path.join(output, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
