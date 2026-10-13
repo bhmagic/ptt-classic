@@ -69,6 +69,21 @@ test('Ptt2Site configures min_cols = 20 and clamps terminal size accordingly', (
   assert.deepEqual(ptt2.clampTermSize(80, 24), { cols: 80, rows: 24 });
 });
 
+test('TermBuf initializes with configured site profile directly from constructor options', async () => {
+  const { TermBuf } = await import('../src/js/term_buf.js');
+
+  const bufWithPtt2 = new TermBuf(80, 24, 'ptt2');
+  assert.equal(bufWithPtt2.site.name, 'ptt2');
+  assert.equal(bufWithPtt2.site.min_cols, 20);
+
+  const ptt2Instance = new Ptt2Site();
+  const bufWithInstance = new TermBuf(80, 24, ptt2Instance);
+  assert.equal(bufWithInstance.site, ptt2Instance);
+
+  const defaultBuf = new TermBuf(80, 24);
+  assert.equal(defaultBuf.site.name, 'auto');
+});
+
 test('BaseSite detects pass/continue prompt screen', () => {
   const site = new BaseSite();
   const mockTerm1 = {

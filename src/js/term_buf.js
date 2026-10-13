@@ -271,8 +271,9 @@ export class TermBuf extends EventEmitter {
   /**
    * @param {number} cols
    * @param {number} rows
+   * @param {string|BaseSite|null} [site]
    */
-  constructor(cols, rows) {
+  constructor(cols, rows, site = null) {
     super();
     const validCols = (typeof cols === 'number' && Number.isFinite(cols) && cols > 0) ? Math.floor(cols) : 80;
     const validRows = (typeof rows === 'number' && Number.isFinite(rows) && rows > 0) ? Math.floor(rows) : 24;
@@ -311,7 +312,7 @@ export class TermBuf extends EventEmitter {
     this.hasFrameSync = false;
     this._syncUpdateTimeout = null;
 
-    this.site = getSite(process.env.SITE_TYPE || 'auto');
+    this.site = site ? (typeof site === 'string' ? getSite(site) : site) : getSite(process.env.SITE_TYPE || 'auto');
 
     /** @type {TermChar[][]} */
     this.lines = new Array(validRows);

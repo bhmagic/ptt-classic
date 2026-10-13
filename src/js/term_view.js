@@ -45,7 +45,8 @@ export class TermView extends EventEmitter {
   this.viewMargin = DEFAULT_PREFS.termMargin;
 
   this.app = options.app || null;
-  this.buf = options.buf || new TermBuf(DEFAULT_PREFS.termSize.cols, DEFAULT_PREFS.termSize.rows);
+  const initialSite = options.site || this.app?.site;
+  this.buf = options.buf || new TermBuf(DEFAULT_PREFS.termSize.cols, DEFAULT_PREFS.termSize.rows, initialSite);
   this.buf.view = this;
   this.buf.on('change', () => this.update());
   this.buf.on('cursor-move', () => this.updateCursorPos());

@@ -34,8 +34,12 @@ import iconLogoConnect from 'Icon/logo_connect.png';
 import iconLogoDisconnect from 'Icon/logo_disconnect.png';
 
 export class App extends EventEmitter {
-  constructor() {
+  constructor(options = {}) {
     super();
+
+    this.options = options;
+    const initialSiteType = options.siteType || options.site || process.env.SITE_TYPE || 'auto';
+    this.site = typeof initialSiteType === 'string' ? getSite(initialSiteType) : (initialSiteType || getSite('auto'));
 
     this._hasConnectedOnce = false;
     initVersionChecker();
@@ -48,6 +52,7 @@ export class App extends EventEmitter {
     this.preserveDomSelection = shouldPreserveDomSelection();
     this.view = new TermView({
       app: this,
+      site: this.site,
       hasWebKitImeQuirk: this.hasWebKitImeQuirk,
       preserveDomSelection: this.preserveDomSelection,
     });
@@ -55,6 +60,9 @@ export class App extends EventEmitter {
       this.lastSelection = selection;
     });
     this.buf = this.view.buf;
+    if (this.buf && this.buf.site !== this.site) {
+      this.buf.site = this.site;
+    }
     this.titleBase = process.env.APP_TITLE;
     this.titleSite = null;
     this.titleConn = null;
@@ -477,6 +485,20 @@ export class App extends EventEmitter {
     this._doConnect(url, siteType);
   }
 
+  setSite(siteType) {
+    const nextSite = typeof siteType === 'string' ? getSite(siteType) : (siteType || getSite('auto'));
+    this.site = nextSite;
+    if (this.buf) {
+      this.buf.site = nextSite;
+    }
+    if (this.stream) {
+      this.stream.charset = nextSite ? nextSite.charset : 'big5';
+    }
+    if (this.resizer) {
+      this.resizer();
+    }
+  }
+
   _doConnect(url, siteType) {
     this._hasConnectedOnce = true;
     this.dismissAlert('connection');
@@ -497,10 +519,8 @@ export class App extends EventEmitter {
         return;
     }
 
-    this.site = getSite(siteType || process.env.SITE_TYPE || 'auto');
-    this.buf.site = this.site;
-    if (this.resizer) {
-      this.resizer();
+    if (siteType) {
+      this.setSite(siteType);
     }
 
     const wsConn = new Websocket(parsed.url);
@@ -528,6 +548,8 @@ export class App extends EventEmitter {
     this.conn.isConnected = true;
     if (this.stream) {
       this.stream.charset = this.site ? this.site.charset : 'big5';
+      this.stream.sendWillNaws(this.buf.cols, this.buf.rows);
+      this.stream.sendNaws(this.buf.cols, this.buf.rows);
     }
     this.site?.resetLoginPrompt?.();
     this.buf?.locator?.reset?.();

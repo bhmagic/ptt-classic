@@ -10,7 +10,15 @@ async function startApp() {
   }
   setupI18n();
 
-  const app = new App();
+  // connect params
+  const allowOverride = process.env.ALLOW_OVERRIDE_FROM_QUERY;
+  const siteUrl = (allowOverride && getQueryVariable('site'))
+    || process.env.SITE_URL;
+  const siteType = (allowOverride && (getQueryVariable('type') || getQueryVariable('site_type') || getQueryVariable('profile')))
+    || process.env.SITE_TYPE
+    || 'auto';
+
+  const app = new App({ siteType, siteUrl });
   window.app = app;
 
   if (process.env.DEVELOPER_MODE) {
@@ -26,12 +34,6 @@ async function startApp() {
   app.onValuesPrefChange(app.prefValues || readValuesWithDefault());
 
   // connect.
-  const allowOverride = process.env.ALLOW_OVERRIDE_FROM_QUERY;
-  const siteUrl = (allowOverride && getQueryVariable('site'))
-    || process.env.SITE_URL;
-  const siteType = (allowOverride && (getQueryVariable('type') || getQueryVariable('site_type') || getQueryVariable('profile')))
-    || process.env.SITE_TYPE
-    || 'auto';
   app.connect(siteUrl, siteType);
   app.setInputAreaFocus();
 }

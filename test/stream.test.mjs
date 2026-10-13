@@ -151,6 +151,21 @@ test('Stream sendNaws and sendWillNaws sends NAWS telnet packets', () => {
   assert.deepEqual(conn.sent[1], new Uint8Array([IAC, 0xfa, NAWS, 0, 80, 0, 24, IAC, 0xf0]));
 });
 
+test('Stream sendWillNaws and sendNaws actively syncs small terminal sizes on connect', () => {
+  const conn = new MockConnection();
+  const stream = new Stream(conn);
+  const telnetFilter = new TelnetFilter();
+  stream.registerFilter(telnetFilter);
+
+  // Active sync on connection open with portrait terminal size (e.g. 38x50)
+  stream.sendWillNaws(38, 50);
+  stream.sendNaws(38, 50);
+
+  assert.deepEqual(conn.sent[0], new Uint8Array([IAC, WILL, NAWS]));
+  // w1=0, w2=38, h1=0, h2=50
+  assert.deepEqual(conn.sent[1], new Uint8Array([IAC, 0xfa, NAWS, 0, 38, 0, 50, IAC, 0xf0]));
+});
+
 test('Stream correctly decodes PTT1 welcome screen across chunk boundaries without ;31m leaks', () => {
   const ptt1Raw = fs.readFileSync(new URL('ptt1.txt', import.meta.url));
 
