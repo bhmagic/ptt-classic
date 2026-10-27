@@ -13,7 +13,7 @@ export class AntiIdle extends PluginBase {
   static DEFAULT_INTERVAL_SEC = 180;
   static BACKGROUND_DEBOUNCE_MS = 1000;
   static defaultPrefs = {
-    enableAntiIdle: false,
+    enableAntiIdle: true,
     antiIdleTime: 180,
   };
 

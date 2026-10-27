@@ -5,6 +5,7 @@ import path from 'node:path';
 import {
   DEFAULT_PREFS,
   PREF_STORAGE_KEY,
+  STORAGE_KEY_ANTI_IDLE_RESET,
   getDefaultFontSize,
   getDefaultPrefs,
   parseDefaultPlugins,
@@ -559,4 +560,91 @@ test('TermView fontResize scales beyond 24px in fixed-term-size mode on large vi
 
   mockView.fontResize();
   assert.equal(lastResizedFont, 44, 'fontResize on 1920x1080 must scale to 44px and not be capped at 24px');
+});
+
+test('DEFAULT_PREFS and getDefaultPrefs have enableAntiIdle set to true by default', () => {
+  assert.equal(DEFAULT_PREFS.enableAntiIdle, true);
+  assert.equal(getDefaultPrefs().enableAntiIdle, true);
+});
+
+test('readValuesWithDefault performs one-time reset to enabled when enableAntiIdle was saved as false', () => {
+  const originalWindow = globalThis.window;
+  try {
+    const mockStorage = new MockLocalStorage();
+    globalThis.window = { localStorage: mockStorage };
+
+    // Simulating an existing user who previously saved preferences with the old default (enableAntiIdle: false)
+    mockStorage.setItem(
+      PREF_STORAGE_KEY,
+      JSON.stringify({
+        values: {
+          fontSize: 20,
+          enableAntiIdle: false,
+          antiIdleTime: 180,
+        },
+      })
+    );
+
+    assert.equal(mockStorage.getItem(STORAGE_KEY_ANTI_IDLE_RESET), null);
+
+    const prefs = readValuesWithDefault();
+    assert.equal(prefs.enableAntiIdle, true, 'enableAntiIdle should be reset to true');
+    assert.equal(prefs.fontSize, 20, 'other preferences must be preserved');
+    assert.equal(prefs.antiIdleTime, 180);
+
+    // Verify stored preference in localStorage was updated
+    const saved = JSON.parse(mockStorage.getItem(PREF_STORAGE_KEY));
+    assert.equal(saved.values.enableAntiIdle, true, 'stored preference in localStorage must be updated to true');
+
+    // Verify reset flag was recorded
+    assert.equal(mockStorage.getItem(STORAGE_KEY_ANTI_IDLE_RESET), '1');
+  } finally {
+    globalThis.window = originalWindow;
+  }
+});
+
+test('readValuesWithDefault preserves enableAntiIdle false if one-time reset was already completed', () => {
+  const originalWindow = globalThis.window;
+  try {
+    const mockStorage = new MockLocalStorage();
+    globalThis.window = { localStorage: mockStorage };
+
+    // Migration already ran in the past
+    mockStorage.setItem(STORAGE_KEY_ANTI_IDLE_RESET, '1');
+
+    // User explicitly disabled anti-idle after reset
+    mockStorage.setItem(
+      PREF_STORAGE_KEY,
+      JSON.stringify({
+        values: {
+          enableAntiIdle: false,
+        },
+      })
+    );
+
+    const prefs = readValuesWithDefault();
+    assert.equal(prefs.enableAntiIdle, false, 'explicitly disabled enableAntiIdle should be preserved post-reset');
+
+    const saved = JSON.parse(mockStorage.getItem(PREF_STORAGE_KEY));
+    assert.equal(saved.values.enableAntiIdle, false, 'localStorage must not be altered');
+  } finally {
+    globalThis.window = originalWindow;
+  }
+});
+
+test('writeValues and updatePrefs record one-time reset completion flag', () => {
+  const originalWindow = globalThis.window;
+  try {
+    const mockStorage = new MockLocalStorage();
+    globalThis.window = { localStorage: mockStorage };
+
+    writeValues({ fontSize: 24, enableAntiIdle: false });
+    assert.equal(mockStorage.getItem(STORAGE_KEY_ANTI_IDLE_RESET), '1');
+
+    mockStorage.removeItem(STORAGE_KEY_ANTI_IDLE_RESET);
+    updatePrefs({ enableAntiIdle: false });
+    assert.equal(mockStorage.getItem(STORAGE_KEY_ANTI_IDLE_RESET), '1');
+  } finally {
+    globalThis.window = originalWindow;
+  }
 });

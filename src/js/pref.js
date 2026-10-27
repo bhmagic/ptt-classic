@@ -27,7 +27,7 @@ export const DEFAULT_PREFS = {
   mouseWheelChangePost: false,
   enableBackNavigation: true,
   supportMouseReporting: true,
-  enableAntiIdle: false,
+  enableAntiIdle: true,
   antiIdleTime: 180,
   enableAutoWrap: true,
   lineWrap: 78,
@@ -78,6 +78,7 @@ export const DEFAULT_PREFS = {
 };
 
 export const PREF_STORAGE_KEY = "pttchrome.pref.v1";
+export const STORAGE_KEY_ANTI_IDLE_RESET = "pttchrome.pref.anti_idle_reset.v1";
 
 export const isMobileEnvironment = () => {
   if (typeof window === "undefined" || typeof navigator === "undefined") return false;
@@ -340,14 +341,30 @@ export const readValuesWithDefault = () => {
         ? window.localStorage.getItem(PREF_STORAGE_KEY)
         : null;
     const saved = raw ? JSON.parse(raw).values : null;
+    const defaults = getDefaultPrefs();
     const prefs = {
-      ...getDefaultPrefs(),
+      ...defaults,
       ...saved,
       termSize: {
         ...DEFAULT_PREFS.termSize,
         ...(saved && saved.termSize),
       },
     };
+    if (typeof window !== "undefined" && window.localStorage) {
+      try {
+        const hasReset = window.localStorage.getItem(STORAGE_KEY_ANTI_IDLE_RESET);
+        if (!hasReset) {
+          if (saved && saved.enableAntiIdle === false && defaults.enableAntiIdle !== false) {
+            prefs.enableAntiIdle = true;
+            saved.enableAntiIdle = true;
+            const updatedObj = raw ? JSON.parse(raw) : { values: {} };
+            updatedObj.values = { ...(updatedObj.values || {}), enableAntiIdle: true };
+            window.localStorage.setItem(PREF_STORAGE_KEY, JSON.stringify(updatedObj));
+          }
+          window.localStorage.setItem(STORAGE_KEY_ANTI_IDLE_RESET, "1");
+        }
+      } catch (e) {}
+    }
     if (saved && saved.picPreviewTrustedDomains !== undefined) {
       prefs.picPreviewTrustedDomains = mergeTrustedDomainsWithNewDefaults(
         saved.picPreviewTrustedDomains,
@@ -520,6 +537,7 @@ export const writeValues = (values) => {
           values,
         })
       );
+      window.localStorage.setItem(STORAGE_KEY_ANTI_IDLE_RESET, "1");
     }
   } catch (e) {}
   return values;
@@ -545,6 +563,7 @@ export const updatePrefs = (patch) => {
         delete obj.values.enableAutoLogin;
       }
       window.localStorage.setItem(PREF_STORAGE_KEY, JSON.stringify(obj));
+      window.localStorage.setItem(STORAGE_KEY_ANTI_IDLE_RESET, "1");
       return obj.values;
     }
   } catch (e) {}
