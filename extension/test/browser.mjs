@@ -183,6 +183,39 @@ try {
     await modal.locator('.nav a').nth(4).click();
     assert.doesNotMatch(await modal.innerText(), /虛擬鍵盤|PWA|輔助登入|滑鼠瀏覽|Live文|開發者工具/);
     await page.screenshot({ path: path.join(results, 'plugin-settings.png') });
+    const mediaSettings = modal.locator('.PrefModal__MacListItem').filter({ has: page.locator('input[name="enableMediaPreviewer"]') });
+    assert.equal(await mediaSettings.locator('input[type="range"]').count(), 0, 'Image size controls start folded');
+    await mediaSettings.locator('.PrefModal__MacOptionsBtn').click();
+    const heightSlider = mediaSettings.getByRole('slider', { name: '最大顯示高度' });
+    const widthSlider = mediaSettings.getByRole('slider', { name: '最大顯示寬度' });
+    assert.equal(await mediaSettings.getByRole('slider').count(), 2);
+    assert.equal(await heightSlider.inputValue(), '80');
+    assert.equal(await widthSlider.inputValue(), '90');
+    await page.screenshot({ path: path.join(results, 'image-size-settings.png'), animations: 'disabled' });
+    for (const slider of [heightSlider, widthSlider]) {
+      await slider.press('Home');
+      assert.equal(await slider.inputValue(), '10');
+      await slider.press('End');
+      await slider.press('ArrowLeft');
+      assert.equal(await slider.inputValue(), '99');
+      assert.equal(await slider.getAttribute('aria-valuetext'), '99%');
+    }
+    assert.deepEqual(await mediaSettings.locator('output').allTextContents(), ['99%', '99%']);
+    await modal.locator('.close:visible').click();
+    await modal.waitFor({ state: 'hidden' });
+    assert.deepEqual(await page.evaluate(() => {
+      const values = JSON.parse(localStorage.getItem('pttchrome.pref.v1')).values;
+      return [values.picPreviewMaxHeight, values.picPreviewMaxWidth];
+    }), [99, 99]);
+    await page.reload();
+    await waitForTerminal('PTT CLASSIC OFFLINE TEST');
+    assert.deepEqual(await page.evaluate(() => [window.app.prefValues.picPreviewMaxHeight, window.app.prefValues.picPreviewMaxWidth]), [99, 99]);
+    await openMenu();
+    await page.getByRole('menuitem', { name: '設定', exact: true }).click();
+    await modal.locator('.nav a').nth(4).click();
+    await mediaSettings.locator('.PrefModal__MacOptionsBtn').click();
+    assert.equal(await heightSlider.inputValue(), '99');
+    assert.equal(await widthSlider.inputValue(), '99');
     await modal.locator('.close:visible').click();
     await modal.waitFor({ state: 'hidden' });
 

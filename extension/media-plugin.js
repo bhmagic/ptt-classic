@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'preact/compat';
 import { MediaPreviewer } from '../src/plugins/media_previewer/MediaPreviewer.js';
-import { getCachedImageRequest } from '../src/plugins/media_previewer/ImagePreviewer.js';
+import ImagePreviewer, { getCachedImageRequest } from '../src/plugins/media_previewer/ImagePreviewer.js';
+import { getActiveLocale } from '../src/js/i18n.js';
+import { readValuesWithDefault } from '../src/js/pref.js';
 import {
   TRUSTED_IMAGE_DOMAINS, isTrustedImageDomain, resolveImageUrl, registerImageIntersection,
 } from '../src/plugins/media_previewer/image_preview_util.js';
@@ -10,6 +12,61 @@ import { getYoutubeEmbedUrl } from './vendor/ptt-media-preview/src/shared/embed.
 
 const h = React.createElement;
 const metadataCache = new Map();
+const IMAGE_SIZE_DEFAULTS = { picPreviewMaxHeight: 80, picPreviewMaxWidth: 90 };
+
+function imageSizePercent(value, fallback) {
+  const number = Number(value);
+  return value !== null && value !== '' && Number.isFinite(number)
+    ? Math.max(10, Math.min(100, Math.round(number))) : fallback;
+}
+
+function ImageSizeOptions({ values = {}, handleValueChange }) {
+  const chinese = getActiveLocale() === 'zh_tw';
+  return h('div', { className: 'ptt-image-size-options' },
+    ...[
+      ['picPreviewMaxHeight', chinese ? '最大顯示高度' : 'Maximum display height'],
+      ['picPreviewMaxWidth', chinese ? '最大顯示寬度' : 'Maximum display width'],
+    ].map(([name, label]) => {
+      const value = imageSizePercent(values[name], IMAGE_SIZE_DEFAULTS[name]);
+      return h('div', { key: name, className: 'ptt-image-size-control' },
+        h('label', { htmlFor: name }, label),
+        h('output', { htmlFor: name }, `${value}%`),
+        h('input', {
+          id: name, name, type: 'range', min: 10, max: 100, step: 1, value,
+          'aria-valuetext': `${value}%`, 'aria-describedby': 'ptt-image-size-help',
+          onInput: event => handleValueChange(name, Number(event.currentTarget.value)),
+        }));
+    }),
+    h('p', { id: 'ptt-image-size-help' }, chinese
+      ? '以視窗尺寸的百分比設定，同時套用至文章內圖片與滑鼠預覽。保留圖片比例，小圖不放大。關閉設定後套用。'
+      : 'Percent of the window size, shared by inline and hover images. Proportions stay intact; small images are not enlarged. Applied when settings close.'));
+}
+
+function SizedHoverImage(props) {
+  const [viewport, setViewport] = useState(() => ({ width: window.innerWidth, height: window.innerHeight }));
+  useEffect(() => {
+    const resize = () => setViewport({ width: window.innerWidth, height: window.innerHeight });
+    window.addEventListener('resize', resize);
+    return () => window.removeEventListener('resize', resize);
+  }, []);
+  const { value, error, limits } = props;
+  if (!value || error) return h(ImagePreviewer.OnHover, props);
+  const margin = 8;
+  const maxWidth = Math.min(viewport.width * limits.width / 100, viewport.width - margin * 2);
+  const maxHeight = Math.min(viewport.height * limits.height / 100, viewport.height - margin * 2);
+  const scale = Math.min(1, maxWidth / value.width, maxHeight / value.height);
+  const width = value.width * scale;
+  const height = value.height * scale;
+  const cursorLeft = Number.isFinite(props.left) ? props.left : 20;
+  const cursorTop = Number.isFinite(props.top) ? props.top : 20;
+  const preferredLeft = cursorLeft + 20 + width > viewport.width - margin
+    ? cursorLeft - 20 - width : cursorLeft + 20;
+  const left = Math.max(margin, Math.min(viewport.width - margin - width, preferredLeft));
+  const top = Math.max(margin, Math.min(viewport.height - margin - height, cursorTop - height / 2));
+  return h('div', {
+    className: 'image-preview-popup image-preview-loaded ptt-sized-hover', style: { left, top },
+  }, h('img', { src: value.src, referrerPolicy: 'no-referrer', style: { width, height } }));
+}
 
 function classify(href, whitelistOnly, domains) {
   let url;
@@ -121,7 +178,46 @@ export class ExtensionMediaPreviewer extends MediaPreviewer {
       picPreviewWhitelistOnly: true,
       picPreviewTrustedDomains: [...TRUSTED_IMAGE_DOMAINS],
       picPreviewKnownDefaults: [...TRUSTED_IMAGE_DOMAINS],
+      ...IMAGE_SIZE_DEFAULTS,
     };
+  }
+
+  static renderOptions(props) {
+    return h(React.Fragment, null, h(ImageSizeOptions, props), super.renderOptions(props));
+  }
+
+  _applyImageLimits(prefs) {
+    this.imageLimits = {
+      width: imageSizePercent(prefs.picPreviewMaxWidth, IMAGE_SIZE_DEFAULTS.picPreviewMaxWidth),
+      height: imageSizePercent(prefs.picPreviewMaxHeight, IMAGE_SIZE_DEFAULTS.picPreviewMaxHeight),
+    };
+    // CSS updates already mounted inline images without rebuilding the article.
+    document.documentElement.style.setProperty('--ptt-image-max-width', `${this.imageLimits.width}vw`);
+    document.documentElement.style.setProperty('--ptt-image-max-height', `${this.imageLimits.height}vh`);
+  }
+
+  syncFromPrefs() {
+    super.syncFromPrefs();
+    this._applyImageLimits(this.app?.prefValues ?? readValuesWithDefault());
+  }
+
+  onInit() {
+    super.onInit();
+    this.listenApp('term:pref-change', event => {
+      const key = event?.key ?? event?.detail?.key;
+      if (!Object.hasOwn(IMAGE_SIZE_DEFAULTS, key)) return;
+      const value = event?.value ?? event?.detail?.value;
+      this._applyImageLimits({ ...this.app.prefValues, [key]: value });
+      if (this.enabled) this.view?.redraw?.(true);
+    });
+  }
+
+  _updateViewHooks(enabled) {
+    super._updateViewHooks(enabled);
+    if (enabled && this.view) {
+      this.view.renderHyperlinkPreview = props => props.request
+        ? h(ImagePreviewer, { ...props, limits: this.imageLimits, component: SizedHoverImage }) : null;
+    }
   }
 
   resolveImageUrl(href, whitelistOnly = this.whitelistOnly, domains = this.trustedDomains) {

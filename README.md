@@ -1,19 +1,23 @@
 # PTT Classic — powered by ptt-term
 
-PTT in a Chrome tab, using the current [ptt/ptt-term](https://github.com/ptt/ptt-term) terminal core with direct connection unblocking and integrated media previews. Version **0.2.0** is a test release based on upstream 3.0.3, production commit [`ba7c00d`](https://github.com/ptt/ptt-term/commit/ba7c00d5edff1654bf3cc89994b9dd2d23a072fe).
+PTT in a Chrome tab, using the current [ptt/ptt-term](https://github.com/ptt/ptt-term) terminal core with direct connection unblocking and integrated media previews. Version **0.2.1** is a test release based on upstream 3.0.3, production commit [`ba7c00d`](https://github.com/ptt/ptt-term/commit/ba7c00d5edff1654bf3cc89994b9dd2d23a072fe).
 
 The original classic interface is preserved separately as [release 0.1.1](https://github.com/bhmagic/ptt-classic/releases/tag/v0.1.1), including its ready-to-load ZIP and complete source. The permanent `archive/classic-0.1.1` branch also preserves that version.
 
 ## Install or update
 
-1. Download the ready-to-load `ptt-classic-0.2.0.zip` from the [0.2.0 test release](https://github.com/bhmagic/ptt-classic/releases/tag/v0.2.0) and extract it. GitHub's automatic Source code ZIP is not an installable extension.
+1. Download the ready-to-load `ptt-classic-0.2.1.zip` from the [0.2.1 test release](https://github.com/bhmagic/ptt-classic/releases/tag/v0.2.1) and extract it. GitHub's automatic Source code ZIP is not an installable extension.
 2. Open `chrome://extensions`, enable Developer mode, and load the folder containing `manifest.json`. A local build writes to `dist/ptt-classic`.
 3. For an existing installation, log out of PTT, replace its folder with the new package, click Reload on the extension card, and refresh the terminal tab. If using this checkout's existing `dist/ptt-classic` installation, the build already updates that folder.
 4. Click the PTT Classic extension icon to open the terminal.
 
 The fixed extension ID and bookmark remain `chrome-extension://gpephnjkgejlfddpjkgkeiffflnnkekg/index.html`. The upgrade preserves saved preferences, maps the old margin and preview settings, and stores a copy of the original settings before migration. No local server or additional extension is needed.
 
-## What changed in 0.2.0
+## What changed in 0.2.1
+
+Expand Settings → Add-ons → Image and Media Preview → Options to adjust maximum image height and width. The two sliders range from 10% to 100% of the window dimensions, defaulting to 80% height and 90% width. They share one saved setting for inline and hover images and apply when settings close. Images keep their proportions, small images are not enlarged, and inline images also fit the article width. Original files are unchanged.
+
+## Core upgrade in 0.2.0
 
 - Replaced the legacy React/Bootstrap terminal with the upstream Preact core: Canvas rendering, a DOM fallback, modern Big5/Unicode support, updated input handling, themes, settings, and Easy Reading.
 - Preserved the direct PTT WebSocket Origin rule and extension-scoped Imgur, YouTube, and `i.verb.tw` header fixes.

@@ -15,6 +15,18 @@ async function assertBorderless(locator) {
   assert.deepEqual(style, { border: '0px', padding: '0px', background: 'rgba(0, 0, 0, 0)' });
 }
 
+async function assertImageSize(locator, { width, height }) {
+  const bounds = await locator.boundingBox();
+  assert.ok(Math.abs(bounds.width - width) < 1, `Expected image width ${width}, got ${bounds.width}`);
+  assert.ok(Math.abs(bounds.height - height) < 1, `Expected image height ${height}, got ${bounds.height}`);
+}
+
+async function setImageLimits(page, width, height) {
+  await page.evaluate(({ width, height }) => window.app.onValuesPrefChange({
+    ...window.app.prefValues, picPreviewMaxWidth: width, picPreviewMaxHeight: height,
+  }), { width, height });
+}
+
 export async function exerciseMedia(page, send, results) {
   const imageRequests = [];
   const image = '<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000"><rect width="1600" height="1000" fill="#267b92"/><text x="100" y="200" font-size="90" fill="white">Media preview fixture</text></svg>';
@@ -66,6 +78,23 @@ export async function exerciseMedia(page, send, results) {
     }
     await container.locator('a[href="https://i.imgur.com/fixture.jpg"]').hover();
     await preview.waitFor();
+    // Each slider must independently constrain the same image in both renderers.
+    for (const [width, height] of [[30, 100], [100, 25], [100, 100]]) {
+      await setImageLimits(page, width, height);
+      await page.mouse.move(10, 10);
+      await container.locator('a[href="https://i.imgur.com/fixture.jpg"]').hover();
+      await page.waitForFunction(() => document.querySelector('.image-preview-loaded img')?.complete);
+      const viewport = page.viewportSize();
+      const scale = Math.min(1, Math.min(viewport.width * width / 100, viewport.width - 16) / 1600,
+        Math.min(viewport.height * height / 100, viewport.height - 16) / 1000);
+      await assertImageSize(preview, { width: 1600 * scale, height: 1000 * scale });
+      const bounds = await preview.boundingBox();
+      assert.ok(bounds.x >= 0 && bounds.y >= 0 && bounds.x + bounds.width <= viewport.width && bounds.y + bounds.height <= viewport.height);
+    }
+    await setImageLimits(page, 90, 80);
+    await page.mouse.move(10, 10);
+    await container.locator('a[href="https://i.imgur.com/fixture.jpg"]').hover();
+    await preview.waitFor();
     await page.screenshot({ path: `${results}/media-hover-${useCanvasEngine ? 'canvas' : 'dom'}.png` });
     send('\x1b[2J\x1b[HAnother article\r\n');
     await preview.waitFor({ state: 'detached' });
@@ -94,6 +123,23 @@ export async function exerciseMedia(page, send, results) {
     }, href);
     await assertBorderless(target.locator('img'));
   }
+  const inlineImage = page.locator('[data-media-href="https://i.imgur.com/inline.jpg"] img');
+  await inlineImage.scrollIntoViewIfNeeded();
+  await inlineImage.evaluate(img => { img.dataset.sizeTestMounted = 'true'; });
+  await setImageLimits(page, 30, 100);
+  const viewport = page.viewportSize();
+  await assertImageSize(inlineImage, { width: viewport.width * 0.3, height: viewport.width * 0.3 / 1.6 });
+  await setImageLimits(page, 100, 25);
+  await assertImageSize(inlineImage, { width: viewport.height * 0.25 * 1.6, height: viewport.height * 0.25 });
+  assert.equal(await inlineImage.getAttribute('data-size-test-mounted'), 'true', 'Changing limits resizes existing inline images without remounting them');
+  await page.setViewportSize({ width: 900, height: 600 });
+  await assertImageSize(inlineImage, { width: 600 * 0.25 * 1.6, height: 600 * 0.25 });
+  await page.setViewportSize(viewport);
+  await setImageLimits(page, 100, 100);
+  const containerWidth = await inlineImage.evaluate(img => img.parentElement.clientWidth);
+  const scale = Math.min(1, containerWidth / 1600, viewport.width / 1600, viewport.height / 1000);
+  await assertImageSize(inlineImage, { width: 1600 * scale, height: 1000 * scale });
+  await setImageLimits(page, 90, 80);
   const album = page.locator('[data-media-href="https://imgur.com/a/album123"]');
   await album.scrollIntoViewIfNeeded();
   await album.locator('video').waitFor();
@@ -111,5 +157,6 @@ export async function exerciseMedia(page, send, results) {
   await page.screenshot({ path: `${results}/media-inline.png` });
   return { canvasHover: true, domHover: true, verbHover: true, verbInline: true, meeeFallback: true,
     imgurAlbum: true, imgurUnknown: true, stalePreviewCleanup: true, realArticleInline: true,
-    albumVideo: true, youtubeElement: true, twitchLink: true, borderlessImages: true };
+    albumVideo: true, youtubeElement: true, twitchLink: true, borderlessImages: true,
+    sharedImageSizeSliders: true, independentWidthAndHeight: true, inlineResizeWithoutRemount: true };
 }
