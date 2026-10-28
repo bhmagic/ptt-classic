@@ -164,9 +164,10 @@ export async function exerciseMedia(page, send, results) {
   for (const [width, height] of [[100, 100], [30, 100], [100, 25], [90, 80]]) {
     await setImageLimits(page, width, height);
     const parent = await youtube.locator('..').boundingBox();
-    const expectedWidth = Math.min(parent.width, 800, viewport.width * width / 100, viewport.height * height / 100 * 16 / 9);
+    const expectedWidth = Math.min(parent.width, viewport.width * width / 100, viewport.height * height / 100 * 16 / 9);
     await assertImageSize(youtube, { width: expectedWidth, height: expectedWidth * 9 / 16 });
     const frame = await youtube.boundingBox();
+    if (width === 100 && height === 100) assert.ok(frame.width > 800, 'YouTube must expand beyond the former fixed cap');
     assert.ok(Math.abs(frame.x + frame.width / 2 - parent.x - parent.width / 2) < 1, 'YouTube must stay centered within the article');
   }
   assert.equal(await youtube.getAttribute('data-size-test-mounted'), 'true', 'Changing limits must not recreate the YouTube player');

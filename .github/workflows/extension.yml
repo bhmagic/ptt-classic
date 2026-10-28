@@ -38,7 +38,7 @@ jobs:
       - name: Upload ready-to-load extension
         uses: actions/upload-artifact@v4
         with:
-          name: ptt-classic-0.2.2
+          name: ptt-classic-0.2.3
           path: dist/ptt-classic/
           if-no-files-found: error
       - name: Upload browser test results

@@ -1,23 +1,23 @@
 # PTT Classic — powered by ptt-term
 
-PTT in a Chrome tab, using the current [ptt/ptt-term](https://github.com/ptt/ptt-term) terminal core with direct connection unblocking and integrated media previews. Version **0.2.2** is a test release based on upstream 3.0.3, production commit [`ba7c00d`](https://github.com/ptt/ptt-term/commit/ba7c00d5edff1654bf3cc89994b9dd2d23a072fe).
+PTT in a Chrome tab, using the current [ptt/ptt-term](https://github.com/ptt/ptt-term) terminal core with direct connection unblocking and integrated media previews. Version **0.2.3** is a test release based on upstream 3.0.3, production commit [`ba7c00d`](https://github.com/ptt/ptt-term/commit/ba7c00d5edff1654bf3cc89994b9dd2d23a072fe).
 
 The original classic interface is preserved separately as [release 0.1.1](https://github.com/bhmagic/ptt-classic/releases/tag/v0.1.1), including its ready-to-load ZIP and complete source. The permanent `archive/classic-0.1.1` branch also preserves that version.
 
 ## Install or update
 
-1. Download the ready-to-load `ptt-classic-0.2.2.zip` from the [0.2.2 test release](https://github.com/bhmagic/ptt-classic/releases/tag/v0.2.2) and extract it. GitHub's automatic Source code ZIP is not an installable extension.
+1. Download the ready-to-load `ptt-classic-0.2.3.zip` from the [0.2.3 test release](https://github.com/bhmagic/ptt-classic/releases/tag/v0.2.3) and extract it. GitHub's automatic Source code ZIP is not an installable extension.
 2. Open `chrome://extensions`, enable Developer mode, and load the folder containing `manifest.json`. A local build writes to `dist/ptt-classic`.
 3. For an existing installation, log out of PTT, replace its folder with the new package, click Reload on the extension card, and refresh the terminal tab. If using this checkout's existing `dist/ptt-classic` installation, the build already updates that folder.
 4. Click the PTT Classic extension icon to open the terminal.
 
 The fixed extension ID and bookmark remain `chrome-extension://gpephnjkgejlfddpjkgkeiffflnnkekg/index.html`. The upgrade preserves saved preferences, maps the old margin and preview settings, and stores a copy of the original settings before migration. No local server or additional extension is needed.
 
-## What changed in 0.2.2
+## Media sizing in 0.2.3
 
 Preview limits only shrink oversized images. Smaller images stay at their natural size, even with both sliders at 100%. Inline images no longer inherit the terminal's legacy preview scaling. Both inline and hover previews are checked for shrinking and returning to natural size without enlargement.
 
-Inline YouTube players use the same height and width limits, remain centered in the article, and preserve their 16:9 shape. They shrink from the existing 800-pixel maximum width as needed. Adjusting the limits resizes the existing player without reloading it.
+Inline YouTube players use the same height and width limits, remain centered in the article, and preserve their 16:9 shape. Version 0.2.3 removes the fixed 800-pixel cap: only the two sliders and available article width determine the player size. Adjusting the limits resizes the existing player without reloading it.
 
 ## Image size controls in 0.2.1
 

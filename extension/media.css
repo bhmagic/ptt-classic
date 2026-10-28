@@ -30,7 +30,7 @@
 .ptt-image-size-options p { margin: 0; font-size: 12px; line-height: 1.5; color: var(--mac-text-secondary); }
 .ptt-inline-youtube {
   display: block;
-  width: min(100%, 800px, var(--ptt-image-max-width, 90vw), calc(var(--ptt-image-max-height, 80vh) * 16 / 9));
+  width: min(100%, var(--ptt-image-max-width, 90vw), calc(var(--ptt-image-max-height, 80vh) * 16 / 9));
   height: auto;
   aspect-ratio: 16 / 9;
   margin: 0 auto;
