@@ -1,4 +1,4 @@
-# PTT Classic 0.2.3 for Chrome
+# PTT Classic 0.2.4 for Chrome
 
 A local Manifest V3 extension powered by ptt-term 3.0.3 at production commit `ba7c00d5edff1654bf3cc89994b9dd2d23a072fe`. Source: [bhmagic/ptt-classic](https://github.com/bhmagic/ptt-classic). This is an independent community build.
 
@@ -14,7 +14,7 @@ Hover over an image URL for a floating preview. In Settings → Add-ons, enable 
 
 Expand Image and Media Preview → Options under Settings → Add-ons for two size sliders: maximum display height and maximum display width. Each ranges from 10% to 100% of the window size; defaults are 80% height and 90% width. Both inline and hover images use these same saved values, applied when settings close. These are upper limits: oversized images shrink proportionally, and smaller images stay at their natural size instead of filling the limit. Inline images also stay within the article width and ignore the terminal's legacy preview scaling. This changes display size only.
 
-Inline YouTube players follow both sliders too and align to the center of the article. They preserve their 16:9 shape with no fixed pixel-width cap; only the sliders and available article width constrain their size. Changing limits does not recreate or reload the player.
+YouTube has its own display-width slider below the image controls: 240–2560px in 10px steps, with an 800px default. It is independent of both image limits. Players stay centered at 16:9, shrink to fit the article width if needed, and resize without being recreated or reloaded. The pixel-width setting is saved when settings close.
 
 The remaining add-ons are Media Preview, Input Helper, Easy Reading, Auto Wrap, and Anti-Idle. Virtual Keyboard, PWA Installation, Login Assist, Mouse Browsing, Live Update, and Developer Tools are removed from the active registry and settings.
 

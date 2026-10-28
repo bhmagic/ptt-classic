@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { EventEmitter, once } from 'node:events';
 import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -64,6 +65,11 @@ try {
   });
 
   const sent = [];
+  const sentEvents = new EventEmitter();
+  const waitForSent = async pattern => {
+    const signal = AbortSignal.timeout(12000);
+    while (!pattern.test(sent.join(''))) await once(sentEvents, 'message', { signal });
+  };
   let offlineSocket;
   if (!live) {
     await page.addInitScript(() => {
@@ -82,7 +88,10 @@ try {
         Buffer.from([0xa4, 0xa4, 0xa4, 0xe5]),
         Buffer.from('\r\nTerminal ready\r\n')
       ]));
-      socket.onMessage(message => sent.push(Buffer.from(message).toString('latin1')));
+      socket.onMessage(message => {
+        sent.push(Buffer.from(message).toString('latin1'));
+        sentEvents.emit('message');
+      });
     });
     await page.route(/^https?:/, route => route.abort());
   }
@@ -151,6 +160,7 @@ try {
     await page.keyboard.press('ArrowDown');
     await page.keyboard.type('abc');
     await page.keyboard.press('Enter');
+    await waitForSent(/\x1b\[A\x1b\[Babc\r/);
     assert.match(sent.join(''), /\x1b\[A\x1b\[Babc\r/);
 
     const openMenu = async () => {
@@ -188,9 +198,11 @@ try {
     await mediaSettings.locator('.PrefModal__MacOptionsBtn').click();
     const heightSlider = mediaSettings.getByRole('slider', { name: '最大顯示高度' });
     const widthSlider = mediaSettings.getByRole('slider', { name: '最大顯示寬度' });
-    assert.equal(await mediaSettings.getByRole('slider').count(), 2);
+    const youtubeSlider = mediaSettings.getByRole('slider', { name: 'YouTube 顯示寬度' });
+    assert.equal(await mediaSettings.getByRole('slider').count(), 3);
     assert.equal(await heightSlider.inputValue(), '80');
     assert.equal(await widthSlider.inputValue(), '90');
+    assert.equal(await youtubeSlider.inputValue(), '800');
     await page.screenshot({ path: path.join(results, 'image-size-settings.png'), animations: 'disabled' });
     for (const slider of [heightSlider, widthSlider]) {
       await slider.press('Home');
@@ -200,22 +212,29 @@ try {
       assert.equal(await slider.inputValue(), '99');
       assert.equal(await slider.getAttribute('aria-valuetext'), '99%');
     }
-    assert.deepEqual(await mediaSettings.locator('output').allTextContents(), ['99%', '99%']);
+    await youtubeSlider.press('End');
+    assert.equal(await youtubeSlider.inputValue(), '2560');
+    await youtubeSlider.press('Home');
+    assert.equal(await youtubeSlider.inputValue(), '240');
+    await youtubeSlider.press('ArrowRight');
+    assert.equal(await youtubeSlider.getAttribute('aria-valuetext'), '250 px');
+    assert.deepEqual(await mediaSettings.locator('output').allTextContents(), ['99%', '99%', '250 px']);
     await modal.locator('.close:visible').click();
     await modal.waitFor({ state: 'hidden' });
     assert.deepEqual(await page.evaluate(() => {
       const values = JSON.parse(localStorage.getItem('pttchrome.pref.v1')).values;
-      return [values.picPreviewMaxHeight, values.picPreviewMaxWidth];
-    }), [99, 99]);
+      return [values.picPreviewMaxHeight, values.picPreviewMaxWidth, values.youtubePreviewWidth];
+    }), [99, 99, 250]);
     await page.reload();
     await waitForTerminal('PTT CLASSIC OFFLINE TEST');
-    assert.deepEqual(await page.evaluate(() => [window.app.prefValues.picPreviewMaxHeight, window.app.prefValues.picPreviewMaxWidth]), [99, 99]);
+    assert.deepEqual(await page.evaluate(() => [window.app.prefValues.picPreviewMaxHeight, window.app.prefValues.picPreviewMaxWidth, window.app.prefValues.youtubePreviewWidth]), [99, 99, 250]);
     await openMenu();
     await page.getByRole('menuitem', { name: '設定', exact: true }).click();
     await modal.locator('.nav a').nth(4).click();
     await mediaSettings.locator('.PrefModal__MacOptionsBtn').click();
     assert.equal(await heightSlider.inputValue(), '99');
     assert.equal(await widthSlider.inputValue(), '99');
+    assert.equal(await youtubeSlider.inputValue(), '250');
     await modal.locator('.close:visible').click();
     await modal.waitFor({ state: 'hidden' });
 
@@ -236,6 +255,7 @@ try {
     await openMenu();
     await page.getByRole('menuitem', { name: /貼上/ }).click();
     await page.waitForFunction(() => !document.querySelector('#cmenuReact .open'));
+    await waitForSent(/paste fixture \xa4\xa4\xa4\xe5/);
     assert.match(sent.join(''), /paste fixture \xa4\xa4\xa4\xe5/);
     await openMenu();
     await page.getByRole('menuitem', { name: /全選/ }).click();

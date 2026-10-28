@@ -27,6 +27,12 @@ async function setImageLimits(page, width, height) {
   }), { width, height });
 }
 
+async function setYoutubeWidth(page, youtubePreviewWidth) {
+  await page.evaluate(youtubePreviewWidth => window.app.onValuesPrefChange({
+    ...window.app.prefValues, youtubePreviewWidth,
+  }), youtubePreviewWidth);
+}
+
 export async function exerciseMedia(page, send, results) {
   const imageRequests = [];
   const image = '<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000"><rect width="1600" height="1000" fill="#267b92"/><text x="100" y="200" font-size="90" fill="white">Media preview fixture</text></svg>';
@@ -161,21 +167,31 @@ export async function exerciseMedia(page, send, results) {
   assert.match(await youtube.getAttribute('src'), /\/embed\/M7lc1UVf-VE\?start=45$/);
   assert.equal(await youtube.getAttribute('loading'), 'lazy');
   await youtube.evaluate(frame => { frame.dataset.sizeTestMounted = 'true'; });
+  await setYoutubeWidth(page, 960);
   for (const [width, height] of [[100, 100], [30, 100], [100, 25], [90, 80]]) {
     await setImageLimits(page, width, height);
+    await assertImageSize(youtube, { width: 960, height: 540 });
+  }
+  const imageBeforeVideoResize = await inlineImage.boundingBox();
+  for (const width of [240, 800, 1200, 2560]) {
+    await setYoutubeWidth(page, width);
     const parent = await youtube.locator('..').boundingBox();
-    const expectedWidth = Math.min(parent.width, viewport.width * width / 100, viewport.height * height / 100 * 16 / 9);
+    const expectedWidth = Math.min(parent.width, width);
     await assertImageSize(youtube, { width: expectedWidth, height: expectedWidth * 9 / 16 });
     const frame = await youtube.boundingBox();
-    if (width === 100 && height === 100) assert.ok(frame.width > 800, 'YouTube must expand beyond the former fixed cap');
+    if (width === 1200) assert.ok(frame.width > 800, 'The YouTube slider must allow widths above 800px');
     assert.ok(Math.abs(frame.x + frame.width / 2 - parent.x - parent.width / 2) < 1, 'YouTube must stay centered within the article');
   }
-  assert.equal(await youtube.getAttribute('data-size-test-mounted'), 'true', 'Changing limits must not recreate the YouTube player');
-  await setImageLimits(page, 40, 50);
+  await assertImageSize(inlineImage, imageBeforeVideoResize);
+  assert.equal(await youtube.getAttribute('data-size-test-mounted'), 'true', 'Changing either setting must not recreate the YouTube player');
+  await setYoutubeWidth(page, 640);
   await page.setViewportSize({ width: 900, height: 600 });
-  await assertImageSize(youtube, { width: 360, height: 202.5 });
+  await assertImageSize(youtube, { width: 640, height: 360 });
+  await setYoutubeWidth(page, 2560);
+  const narrowParent = await youtube.locator('..').boundingBox();
+  await assertImageSize(youtube, { width: narrowParent.width, height: narrowParent.width * 9 / 16 });
   await page.setViewportSize(viewport);
-  await setImageLimits(page, 90, 80);
+  await setYoutubeWidth(page, 800);
   const twitch = page.locator('[data-media-href^="https://clips.twitch.tv/"]');
   await twitch.scrollIntoViewIfNeeded();
   await twitch.locator('a').waitFor();
@@ -213,5 +229,5 @@ export async function exerciseMedia(page, send, results) {
     albumVideo: true, youtubeElement: true, twitchLink: true, borderlessImages: true,
     sharedImageSizeSliders: true, independentWidthAndHeight: true, inlineResizeWithoutRemount: true,
     smallImagesNeverEnlarged: true, inlineIgnoresTerminalScaling: true,
-    youtubeSharedLimits: true, youtubeCentered: true, youtubeResizeWithoutRemount: true };
+    youtubeIndependentPixelWidth: true, youtubeCentered: true, youtubeResizeWithoutRemount: true };
 }

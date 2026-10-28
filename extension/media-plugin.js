@@ -13,6 +13,7 @@ import { getYoutubeEmbedUrl } from './vendor/ptt-media-preview/src/shared/embed.
 const h = React.createElement;
 const metadataCache = new Map();
 const IMAGE_SIZE_DEFAULTS = { picPreviewMaxHeight: 80, picPreviewMaxWidth: 90 };
+const YOUTUBE_WIDTH = { min: 240, max: 2560, step: 10, defaultValue: 800 };
 
 function imageSizePercent(value, fallback) {
   const number = Number(value);
@@ -20,8 +21,16 @@ function imageSizePercent(value, fallback) {
     ? Math.max(10, Math.min(100, Math.round(number))) : fallback;
 }
 
+function youtubeWidthPixels(value) {
+  const number = Number(value);
+  return value !== null && value !== '' && Number.isFinite(number)
+    ? Math.max(YOUTUBE_WIDTH.min, Math.min(YOUTUBE_WIDTH.max, Math.round(number / YOUTUBE_WIDTH.step) * YOUTUBE_WIDTH.step))
+    : YOUTUBE_WIDTH.defaultValue;
+}
+
 function ImageSizeOptions({ values = {}, handleValueChange }) {
   const chinese = getActiveLocale() === 'zh_tw';
+  const youtubeWidth = youtubeWidthPixels(values.youtubePreviewWidth);
   return h('div', { className: 'ptt-image-size-options' },
     ...[
       ['picPreviewMaxHeight', chinese ? '最大顯示高度' : 'Maximum display height'],
@@ -38,8 +47,20 @@ function ImageSizeOptions({ values = {}, handleValueChange }) {
         }));
     }),
     h('p', { id: 'ptt-image-size-help' }, chinese
-      ? '以視窗尺寸的百分比設定，文章內圖片、YouTube 影片與滑鼠圖片預覽共用上限。只縮小超過上限的圖片，保留比例，不放大填滿上限。關閉設定後套用。'
-      : 'Percent of the window size, shared by inline images, YouTube videos and hover images. Only oversized images shrink, keeping their proportions; smaller images stay at their natural size. Applied when settings close.'));
+      ? '以視窗尺寸的百分比設定，文章內圖片與滑鼠圖片預覽共用上限。只縮小超過上限的圖片，保留比例，不放大填滿上限。關閉設定後套用。'
+      : 'Percent of the window size, shared by inline and hover images. Only oversized images shrink, keeping their proportions; smaller images stay at their natural size. Applied when settings close.'),
+    h('div', { className: 'ptt-image-size-control ptt-youtube-size-control' },
+      h('label', { htmlFor: 'youtubePreviewWidth' }, chinese ? 'YouTube 顯示寬度' : 'YouTube display width'),
+      h('output', { htmlFor: 'youtubePreviewWidth' }, `${youtubeWidth} px`),
+      h('input', {
+        id: 'youtubePreviewWidth', name: 'youtubePreviewWidth', type: 'range',
+        min: YOUTUBE_WIDTH.min, max: YOUTUBE_WIDTH.max, step: YOUTUBE_WIDTH.step, value: youtubeWidth,
+        'aria-valuetext': `${youtubeWidth} px`, 'aria-describedby': 'ptt-youtube-size-help',
+        onInput: event => handleValueChange('youtubePreviewWidth', Number(event.currentTarget.value)),
+      })),
+    h('p', { id: 'ptt-youtube-size-help' }, chinese
+      ? '獨立設定影片寬度，不受上方圖片限制影響。影片置中、維持 16:9，超過文章寬度時自動縮小。'
+      : 'Independent video width in pixels. The player stays centered at 16:9 and shrinks to fit the article width.'));
 }
 
 function SizedHoverImage(props) {
@@ -180,6 +201,7 @@ export class ExtensionMediaPreviewer extends MediaPreviewer {
       picPreviewTrustedDomains: [...TRUSTED_IMAGE_DOMAINS],
       picPreviewKnownDefaults: [...TRUSTED_IMAGE_DOMAINS],
       ...IMAGE_SIZE_DEFAULTS,
+      youtubePreviewWidth: YOUTUBE_WIDTH.defaultValue,
     };
   }
 
@@ -187,28 +209,29 @@ export class ExtensionMediaPreviewer extends MediaPreviewer {
     return h(React.Fragment, null, h(ImageSizeOptions, props), super.renderOptions(props));
   }
 
-  _applyImageLimits(prefs) {
+  _applyMediaSizes(prefs) {
     this.imageLimits = {
       width: imageSizePercent(prefs.picPreviewMaxWidth, IMAGE_SIZE_DEFAULTS.picPreviewMaxWidth),
       height: imageSizePercent(prefs.picPreviewMaxHeight, IMAGE_SIZE_DEFAULTS.picPreviewMaxHeight),
     };
-    // CSS updates already mounted inline images without rebuilding the article.
+    // CSS updates mounted media without rebuilding the article or YouTube player.
     document.documentElement.style.setProperty('--ptt-image-max-width', `${this.imageLimits.width}vw`);
     document.documentElement.style.setProperty('--ptt-image-max-height', `${this.imageLimits.height}vh`);
+    document.documentElement.style.setProperty('--ptt-youtube-width', `${youtubeWidthPixels(prefs.youtubePreviewWidth)}px`);
   }
 
   syncFromPrefs() {
     super.syncFromPrefs();
-    this._applyImageLimits(this.app?.prefValues ?? readValuesWithDefault());
+    this._applyMediaSizes(this.app?.prefValues ?? readValuesWithDefault());
   }
 
   onInit() {
     super.onInit();
     this.listenApp('term:pref-change', event => {
       const key = event?.key ?? event?.detail?.key;
-      if (!Object.hasOwn(IMAGE_SIZE_DEFAULTS, key)) return;
+      if (!Object.hasOwn(IMAGE_SIZE_DEFAULTS, key) && key !== 'youtubePreviewWidth') return;
       const value = event?.value ?? event?.detail?.value;
-      this._applyImageLimits({ ...this.app.prefValues, [key]: value });
+      this._applyMediaSizes({ ...this.app.prefValues, [key]: value });
       if (this.enabled) this.view?.redraw?.(true);
     });
   }

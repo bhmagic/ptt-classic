@@ -28,9 +28,10 @@
 .ptt-image-size-control output { color: var(--mac-text-secondary); font-variant-numeric: tabular-nums; }
 .ptt-image-size-control input { grid-column: 1 / -1; width: 100%; margin: 0; accent-color: var(--mac-accent); }
 .ptt-image-size-options p { margin: 0; font-size: 12px; line-height: 1.5; color: var(--mac-text-secondary); }
+.ptt-youtube-size-control { margin-top: 16px; }
 .ptt-inline-youtube {
   display: block;
-  width: min(100%, var(--ptt-image-max-width, 90vw), calc(var(--ptt-image-max-height, 80vh) * 16 / 9));
+  width: min(100%, var(--ptt-youtube-width, 800px));
   height: auto;
   aspect-ratio: 16 / 9;
   margin: 0 auto;
