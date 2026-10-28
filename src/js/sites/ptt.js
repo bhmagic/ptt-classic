@@ -1,0 +1,551 @@
+import { BaseSite, PAGE_STATE } from './base.js';
+
+export function parseReplyText(it) {
+  return (
+    it.indexOf('▲ 回應至 (F)看板 (M)作者信箱 (B)二者皆是 (Q)取消？[F] ') === 0 ||
+    it.indexOf('▲ 無法回應至看板。 改回應至 (M)作者信箱 (Q)取消？[Q]') === 0 ||
+    it.indexOf('很抱歉, 本板不開放回覆文章，要改回信給作者嗎？ [y/N]:') === 0 ||
+    it.indexOf('把這篇文章收入到暫存檔？[y/N]') === 0 ||
+    it.indexOf('請選擇暫存檔 (0-9)[0]:') === 0 ||
+    it.indexOf('採用原標題') >= 0 ||
+    it.indexOf('請問要引用原文嗎') >= 0
+  );
+}
+
+export function parsePushInitText(it) {
+  return (
+    it.indexOf('您覺得這篇文章 ') === 0 ||
+    /^(?:推|噓|→) *[A-Za-z0-9_]+ *:/.test(it) ||
+    it.indexOf('很抱歉, 本板不開放回覆文章，要改回信給作者嗎？ [y/N]:') === 0 ||
+    it.indexOf('確定[y/N]:') >= 0
+  );
+}
+
+export function parseReqNotMetText(it) {
+  return (
+    it.indexOf(' ◆ 未達看板發文限制:') === 0 ||
+    it.indexOf(' ◆ 本板不開放推文') === 0 ||
+    it.indexOf(' ◆ 很抱歉, 距離上次推文時間過短') === 0 ||
+    it.indexOf(' ◆ 本篇文章禁止推文') === 0 ||
+    it.indexOf(' ◆ 此文章已鎖定') === 0
+  );
+}
+
+export function parseStatusRow(str) {
+  const regex = /  瀏覽 第 (\d+)(?:\/(\d+))? 頁 *\( *(\d+)%\)  (?:目前顯示|顯示範圍): 第 0*(\d+)~0*(\d+) 行/;
+  const result = regex.exec(str);
+
+  if (result && result.length === 6) {
+    const pagePercent = parseInt(result[3], 10);
+    return {
+      pageIndex:     parseInt(result[1], 10),
+      pageTotal:     result[2] ? parseInt(result[2], 10) : NaN,
+      pagePercent:   pagePercent,
+      rowIndexStart: parseInt(result[4], 10),
+      rowIndexEnd:   parseInt(result[5], 10),
+      isEnd:         pagePercent === 100
+    };
+  }
+
+  const oldRegex = /瀏覽 P\.(\d+)\( *(\d+)%\) *(?:\(y\)回[應信]|\(X\/?%\)推文|\(h\)說明|\(←\/?q?\)離開)/;
+  const oldResult = oldRegex.exec(str);
+  if (oldResult) {
+    const pagePercent = parseInt(oldResult[2], 10);
+    return {
+      pageIndex:     parseInt(oldResult[1], 10),
+      pageTotal:     NaN,
+      pagePercent:   pagePercent,
+      rowIndexStart: NaN,
+      rowIndexEnd:   NaN,
+      isEnd:         pagePercent === 100
+    };
+  }
+
+  return null;
+}
+
+export function parseListRow(str) {
+  if (!str) return false;
+  const regex = /(?:\[\d{1,2}\/\d{1,2} +星期. +\d{1,2}:\d{1,2}\]|\d{1,2}\/\d{1,2}\s*(?:周|星期).\s+\d{1,2}:\d{1,2}).+線上\s*\d+\s*人[,，]\s*我是\s*\w+.*呼叫器\]?(?:關閉|開啟|打開|拔掉|防水|好友)/;
+  return regex.test(str);
+}
+
+
+export class PttSite extends BaseSite {
+  constructor() {
+    super('ptt');
+    this.currentBoard = null;
+    this.hasWeb = true;
+    this.registerEditorEscapeChar('\x15'); // Esc = Ctrl-U
+  }
+
+  get hasWeb() {
+    return this._hasWeb !== undefined ? this._hasWeb : true;
+  }
+
+  set hasWeb(val) {
+    this._hasWeb = Boolean(val);
+  }
+
+  get supportNavKeys() {
+    return true;
+  }
+
+  /**
+   * PTT does not send double keystrokes for DBCS cursor movement.
+   * @returns {boolean}
+   */
+  checkDBCSCursor(key, isLeftDB, isCurDB) {
+    return false;
+  }
+
+  isMenuScreen(termBuf) {
+    if (!termBuf) return false;
+    if (this.isCursorParked(termBuf)) return false;
+
+    let cols = termBuf.cols;
+    let lastRowNum = this.getLastRowNum(termBuf);
+    let firstRowText = termBuf.getRowText(0, 0, cols);
+    let lastRowText = termBuf.getRowText(lastRowNum, 0, cols);
+
+    const isMenuTitle =
+      firstRowText.indexOf('【主功能表】') === 0 ||
+      firstRowText.indexOf('【分類看板】') === 0 ||
+      firstRowText.indexOf('【精華文章】') === 0;
+
+    if (isMenuTitle) {
+      return true;
+    }
+
+    if (firstRowText.indexOf('【') === 0 && parseListRow(lastRowText)) {
+      if (!this.isListScreen(termBuf)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  isListScreen(termBuf) {
+    if (!termBuf) return false;
+    if (this.isCursorParked(termBuf)) return false;
+
+    let cols = termBuf.cols;
+    let lastRowNum = this.getLastRowNum(termBuf);
+
+    // In PTT mbbsd read.c / board.c, cursor is placed on active list item (cur_x < 19)
+    // or on the bottom prompt line (cur_y === lastRowNum)
+    if (termBuf.cur_x !== undefined && termBuf.cur_x >= 19 && termBuf.cur_y !== lastRowNum) {
+      return false;
+    }
+
+    let row0Text = termBuf.getRowText(0, 0, cols);
+    let row1Text = termBuf.getRowText(1, 0, cols);
+    let row2Text = termBuf.getRowText(2, 0, cols);
+
+    // PTT list screens always start row 0 with 【 (e.g. 【板主:...】 看板《...》, 【郵件選單】, etc.)
+    if (!row0Text || row0Text.indexOf('【') !== 0) {
+      return false;
+    }
+
+    // Row 1 has command shortcuts: [←]離開 and [→]閱讀 / [→]選擇
+    const hasCommandRow =
+      /\[←\]\s*離開/.test(row1Text) &&
+      (/\[→\]\s*閱?讀/.test(row1Text) || /\[→\]\s*選擇/.test(row1Text));
+
+    // Row 2 is the table column header containing 編號
+    const hasHeaderRow = row2Text && row2Text.includes('編號');
+
+    if (hasCommandRow || hasHeaderRow) {
+      return true;
+    }
+
+    return false;
+  }
+
+
+  isEditingScreen(termBuf) {
+    let lastRowNum = this.getLastRowNum(termBuf);
+    let cols = termBuf.cols;
+    let lastRowText = termBuf.getRowText(lastRowNum, 0, cols);
+    return lastRowText.indexOf(' 編輯文章  (^Z/F1)說明 (^P/^G)插入符號/範本 (^X/^Q)離開') === 0;
+  }
+
+  parseReadingStatus(rowText, termBuf) {
+    let result = parseStatusRow(rowText);
+    if (result && this.isArticleEnd(rowText, termBuf, result)) {
+      result.isEnd = true;
+    }
+    return result;
+  }
+
+  isArticleEnd(lastRowText, termBuf, statusResult) {
+    if (termBuf && (this.isPushPrompt(termBuf) || this.isReplyPrompt(termBuf))) {
+      return false;
+    }
+    if (termBuf && termBuf.lines) {
+      let lastRowNum = this.getLastRowNum(termBuf);
+      let lastRowFirstCh = termBuf.lines[lastRowNum] && termBuf.lines[lastRowNum][0];
+      if (lastRowFirstCh && lastRowFirstCh.getBg && lastRowFirstCh.getBg() == 4 && lastRowFirstCh.getFg && lastRowFirstCh.getFg() == 7) {
+        return true;
+      }
+    }
+    return super.isArticleEnd(lastRowText, termBuf, statusResult);
+  }
+
+  filterWheelScroll(termBuf, options = {}) {
+    const res = super.filterWheelScroll(termBuf, options);
+    if (
+      this.pageState === PAGE_STATE.READING &&
+      !res.prevent &&
+      !res.overrideCmd
+    ) {
+      if (options.cmd === 'doArrowUp') {
+        return { ...res, overrideCmd: 'k' };
+      }
+      if (options.cmd === 'doArrowDown') {
+        return { ...res, overrideCmd: 'j' };
+      }
+    }
+    return res;
+  }
+
+  isCursorParked(termBuf) {
+    let lastColNum = termBuf.cols - 1;
+    let lastRowNum = this.getLastRowNum(termBuf);
+    return termBuf.cur_y == lastRowNum && termBuf.cur_x == lastColNum;
+  }
+
+  sendAntiIdle(conn) {
+    if (conn.sendTimingMark) {
+      conn.sendTimingMark();
+    } else {
+      conn.sendNop();
+    }
+  }
+
+  getPagingSlice(
+    termBuf,
+    statusResult,
+    actualRowIndex,
+    pageLines = termBuf?.pageLines || [],
+    pageWrappedLines = 0
+  ) {
+    let lastRowNum = this.getLastRowNum(termBuf);
+    if (
+      statusResult &&
+      typeof statusResult.rowIndexStart === 'number' &&
+      statusResult.rowIndexStart === actualRowIndex &&
+      pageLines.length > 0
+    ) {
+      return {
+        beginIndex: 1,
+        atLastPage: false,
+      };
+    }
+    let beginIndex = this.findContentOverlap(termBuf, lastRowNum, pageLines);
+    if (
+      beginIndex === 0 &&
+      statusResult &&
+      typeof statusResult.rowIndexEnd === 'number'
+    ) {
+      let numRows =
+        statusResult.rowIndexEnd - actualRowIndex + 1 + pageWrappedLines;
+      beginIndex = Math.max(0, Math.min(lastRowNum, lastRowNum - numRows));
+    }
+    return {
+      beginIndex,
+      atLastPage: true,
+    };
+  }
+
+  /**
+   * Determine whether row is auto-wrapped by looking for the ending "\" (bright white on black).
+   * Specific to PTT BBS.
+   * @param {TermBuf} termBuf
+   * @param {number} row
+   * @returns {boolean}
+   */
+  isTextWrappedRow(termBuf, row) {
+    if (!termBuf || typeof row !== 'number' || !Number.isFinite(row) || row < 0 || row >= termBuf.rows) return false;
+    const line = termBuf.lines && termBuf.lines[row];
+    if (!line) return false;
+    for (const col of [78, 77]) {
+      const ch = line[col];
+      if (ch && ch.ch === '\\' && ch.fg == 7 && ch.bg === 0 && ch.bright) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  isLineContinuation(termBuf, rowIndex, isInitialPage = false) {
+    if (isInitialPage && rowIndex === 4) {
+      return true;
+    }
+    if (rowIndex > 0 && this.isTextWrappedRow(termBuf, rowIndex - 1)) {
+      return true;
+    }
+    return false;
+  }
+
+  getEasyReadingCommands() {
+    return [
+      ['y', '回應'],
+      ['X%', '推文'],
+    ];
+  }
+
+  getEasyReadingPrompt(spaces = '', percent = 100) {
+    return this.getBasicPrompt(this.getEasyReadingCommands(), spaces, percent);
+  }
+
+  isReplyPrompt(termBuf) {
+    const lastRowNum = this.getLastRowNum(termBuf);
+    if (termBuf.cur_y === lastRowNum - 1) {
+      const secondToLastRowText = termBuf.getRowText(lastRowNum - 1, 0, termBuf.cols);
+      return Boolean(parseReplyText(secondToLastRowText));
+    }
+    return false;
+  }
+
+  isPushPrompt(termBuf) {
+    const lastRowNum = this.getLastRowNum(termBuf);
+    const lastRowText = termBuf.getRowText(lastRowNum, 0, termBuf.cols);
+    if (parseReqNotMetText(lastRowText)) {
+      return true;
+    }
+    if (
+      termBuf.cur_y === lastRowNum &&
+      (parsePushInitText(lastRowText) || parseReplyText(lastRowText))
+    ) {
+      return true;
+    }
+    return false;
+  }
+
+  getLeaveToTerminalCommands() {
+    return ['y', 'Y', 'X', '%', 'r', 'R', 'E', 'T'];
+  }
+
+  getLeaveCurrentPostCommands() {
+    return ['a', 'b', 'f', '=', '+', '-', '[', ']', 'A', 'B', 'F'];
+  }
+
+  handleEasyReadingKeyDown(easyReading, e) {
+    if (super.handleEasyReadingKeyDown(easyReading, e)) {
+      return true;
+    }
+    if (!e.ctrlKey && !e.altKey) {
+      if ("123456789hops;,./\\H#OP:<>".indexOf(e.key) >= 0) {
+        return true;
+      }
+    } else if (e.ctrlKey && !e.altKey) {
+      if ("@^_?".indexOf(e.key) >= 0) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  navigatePrevPost(easyReading) {
+    easyReading.send('\x1b[D\x1b[A\x1b[C');
+    return true;
+  }
+
+  navigateNextPost(easyReading) {
+    easyReading.send('\x1b[D\x1b[B\x1b[C');
+    return true;
+  }
+
+  /**
+   * Extract current board name from terminal screen header if available.
+   * Checks row 0..3 for board title patterns (e.g. 看板《Gossiping》, 看板 Gossiping, 看板: Gossiping).
+   * @param {TermBuf} termBuf 
+   * @returns {string|null}
+   */
+  extractBoardName(termBuf) {
+    if (!termBuf || !termBuf.rows) return null;
+    for (let r = 0; r < Math.min(4, termBuf.rows); ++r) {
+      const rowText = termBuf.getRowText(r, 0, termBuf.cols);
+      const m = /看板[：:\s《]+([0-9A-Za-z_.-]+)》?/.exec(rowText);
+      if (m) {
+        this.currentBoard = m[1];
+        return m[1];
+      }
+    }
+    return this.currentBoard || null;
+  }
+
+  /**
+   * Detect PTT article code (AID) links in a row.
+   * Format: #1gIeu-3A (Android) or #1gIeu-3A [Android] or #1gIeu-3A@Android or #1gIeu-3A
+   * @param {string} lineText 
+   * @param {TermChar[]} lineChars 
+   * @param {TermBuf} [termBuf] 
+   * @returns {Array<{ start: number, end: number, url: string, aid: string, board: string|null }>}
+   */
+  detectCustomLinks(lineText, lineChars, termBuf) {
+    if (termBuf) {
+      this.extractBoardName(termBuf);
+    }
+    if (!lineText) return [];
+    const links = [];
+    const re =
+      /(?:(?<![0-9A-Za-z_.-])(?:\[\s*)?(?:(?:本文)?轉錄[自至]\s+)?[《\[]?([0-9A-Za-z_.-]{2,})[》\]]?\s*看板\s*#([0-9A-Za-z_-]{8})(?![0-9A-Za-z_-])(?:\s*\])?|(?<![0-9A-Za-z_#-])#([0-9A-Za-z_-]{8})(?![0-9A-Za-z_-])(?:\s*(?:\(([0-9A-Za-z_.-]+)\)|\[([0-9A-Za-z_.-]+)\]|@([0-9A-Za-z_.-]+)))?)/g;
+    let m;
+    while ((m = re.exec(lineText)) !== null) {
+      const aid = m[2] || m[3];
+      if (!isAidc(aid)) continue;
+      const board = m[1] || m[4] || m[5] || m[6] || this.extractBoardName(termBuf);
+      let url;
+      if (this.hasWeb && board) {
+        const fn = aidToFn(aid);
+        url = fn ? `https://www.ptt.cc/bbs/${board}/${fn}.html` : `https://www.ptt.cc/bbs/${board}/#${aid}`;
+      } else {
+        url = board ? `#aid=${aid}&board=${board}` : `#aid=${aid}`;
+      }
+      links.push({
+        start: m.index,
+        end: m.index + m[0].length,
+        url,
+        aid,
+        board,
+      });
+    }
+    return links;
+  }
+
+  /**
+   * Handle custom link clicks.
+   * If the URL is an AID action (#aid=...), send keystrokes to terminal.
+   * If it is a web URL (https://www.ptt.cc/...), return false to let browser open the page.
+   * If page state is press anykey (PAGE_STATE.PASS), sends space before #AID keystroke.
+   * In non-web mode, if target board differs from current board, switches board first (s<board>\r).
+   * @param {string} url
+   * @param {object} app
+   * @returns {boolean}
+   */
+  handleCustomLink(url, app) {
+    if (!url || !app) return false;
+    const m = /#aid=([0-9A-Za-z_-]{8})/.exec(url);
+    if (m) {
+      const aid = m[1];
+      let targetBoard = null;
+      const bMatch = /[&?]board=([0-9A-Za-z_.-]+)/.exec(url);
+      if (bMatch) {
+        targetBoard = bMatch[1];
+      } else {
+        const pathBoardMatch = /\/bbs\/([0-9A-Za-z_.-]+)\//.exec(url);
+        if (pathBoardMatch) {
+          targetBoard = pathBoardMatch[1];
+        }
+      }
+
+      const send = (data) => {
+        if (typeof app.send === 'function') {
+          app.send(data);
+        } else if (app.conn?.send) {
+          app.conn.send(data);
+        }
+      };
+      const isAnyKey =
+        this.pageState === PAGE_STATE.PASS ||
+        app.site?.pageState === PAGE_STATE.PASS ||
+        Boolean(app.buf && this.isPassScreen?.(app.buf)) ||
+        Boolean(app.buf && app.site?.isPassScreen?.(app.buf));
+      if (isAnyKey) {
+        send(' ');
+      }
+
+      const currentBoard =
+        (app.buf ? this.extractBoardName(app.buf) : null) ||
+        this.currentBoard ||
+        app.site?.currentBoard ||
+        null;
+      const isSameBoard = Boolean(
+        currentBoard &&
+        targetBoard &&
+        currentBoard.toLowerCase() === targetBoard.toLowerCase()
+      );
+
+      if (!this.hasWeb && targetBoard && !isSameBoard) {
+        send(`s${targetBoard}\r`);
+      }
+
+      send(`#${aid}\r`);
+      app.setInputAreaFocus?.();
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Check if text or termBuf matches PTT login prompt.
+   * Matches string definitions from pttbbs mbbsd / daemon / logind:
+   * "請輸入代號，或以 guest 參觀，或以 new 註冊: " or "請輸入代號"
+   * @param {string} text
+   * @param {TermBuf} [termBuf]
+   * @returns {boolean}
+   */
+  checkLoginPrompt(text, termBuf) {
+    return super.checkLoginPrompt(text, termBuf);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// PTT Article ID (AID) Codec (RFC / pttbbs mbbsd/aids.c specification)
+// ---------------------------------------------------------------------------
+const AIDC_TABLE = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_";
+const AIDC_LEN = 8;
+const TYPE_SCALE = 17592186044416; // 2^44
+const V1_SCALE = 4096;             // 2^12
+const V2_MOD = 4096;
+const V1_MOD = 4294967296;         // 2^32
+
+export function isAidc(aid) {
+  return typeof aid === 'string' && /^[0-9A-Za-z_-]{8}$/.test(aid);
+}
+
+/**
+ * Convert filename (e.g. "M.1786265274.A.5E3") to 8-character AID (e.g. "1gU3wwNZ").
+ * @param {string} fn 
+ * @returns {string|null}
+ */
+export function fnToAid(fn) {
+  if (typeof fn !== 'string') return null;
+  const bare = fn.replace(/\.html$/i, '');
+  const m = /^([MG])\.(\d{1,10})\.A(?:\.([0-9A-Fa-f]{1,3}))?$/.exec(bare);
+  if (!m) return null;
+  const v1 = parseInt(m[2], 10);
+  if (!(v1 >= 0) || v1 >= V1_MOD) return null;
+  const v2 = m[3] ? parseInt(m[3], 16) : 0;
+  const type = m[1] === 'M' ? 0 : 1;
+  let aidu = type * TYPE_SCALE + v1 * V1_SCALE + v2;
+  let out = '';
+  for (let i = 0; i < AIDC_LEN; ++i) {
+    out = AIDC_TABLE.charAt(aidu % 64) + out;
+    aidu = Math.floor(aidu / 64);
+  }
+  return out;
+}
+
+/**
+ * Convert 8-character AID (e.g. "1gU3wwNZ") to filename (e.g. "M.1786265274.A.5E3").
+ * @param {string} aid 
+ * @returns {string|null}
+ */
+export function aidToFn(aid) {
+  if (!isAidc(aid)) return null;
+  let aidu = 0;
+  for (let i = 0; i < aid.length; ++i) {
+    const v = AIDC_TABLE.indexOf(aid.charAt(i));
+    if (v < 0) return null;
+    aidu = aidu * 64 + v;
+  }
+  const type = Math.floor(aidu / TYPE_SCALE) % 16;
+  const v1 = Math.floor(aidu / V1_SCALE) % V1_MOD;
+  const v2 = aidu % V2_MOD;
+  const hex = v2.toString(16).toUpperCase().padStart(3, '0');
+  return (type === 0 ? 'M' : 'G') + '.' + v1 + '.A.' + hex;
+}
+

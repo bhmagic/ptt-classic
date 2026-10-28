@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { EventEmitter, once } from 'node:events';
 import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -33,7 +34,7 @@ try {
   const errors = [];
   const failedRequests = [];
   const remoteRequests = [];
-  page.on('pageerror', error => errors.push(error.message));
+  page.on('pageerror', error => { errors.push(error.message); console.error(error.stack); });
   page.on('console', message => {
     if (message.type() === 'error') {
       errors.push(message.text());
@@ -64,8 +65,22 @@ try {
   });
 
   const sent = [];
+  const sentEvents = new EventEmitter();
+  const waitForSent = async pattern => {
+    const signal = AbortSignal.timeout(12000);
+    while (!pattern.test(sent.join(''))) await once(sentEvents, 'message', { signal });
+  };
   let offlineSocket;
   if (!live) {
+    await page.addInitScript(() => {
+      if (!localStorage.getItem('pttchrome.pref.v1')) {
+        localStorage.setItem('pttchrome.pref.v1', JSON.stringify({ values: {
+          fontFace: 'monospace', bbsMargin: 12, enablePicPreview: true,
+          mouseLeftFunction: 1, mouseMiddleFunction: 3, mouseWheelFunction1: 1,
+          enableLiveUpdate: true, enableAutoLogin: true,
+        } }));
+      }
+    });
     await page.routeWebSocket('wss://ws.ptt.cc/bbs', socket => {
       offlineSocket = socket;
       socket.send(Buffer.concat([
@@ -73,7 +88,10 @@ try {
         Buffer.from([0xa4, 0xa4, 0xa4, 0xe5]),
         Buffer.from('\r\nTerminal ready\r\n')
       ]));
-      socket.onMessage(message => sent.push(Buffer.from(message).toString('latin1')));
+      socket.onMessage(message => {
+        sent.push(Buffer.from(message).toString('latin1'));
+        sentEvents.emit('message');
+      });
     });
     await page.route(/^https?:/, route => route.abort());
   }
@@ -111,49 +129,130 @@ try {
   assert.equal(scope.otherPageVerbImage + scope.verbTopLevel + scope.verbFetch + scope.verbOtherHost + scope.verbLookalike + scope.verbHttp, 0);
   assert.equal(scope.otherPageImgurImage + scope.otherPageYoutubeEmbed + scope.youtubeTopLevel, 0);
   assert.deepEqual([...scope.permissions.origins].sort(), ['https://*.imgur.com/*', 'https://i.verb.tw/*', 'https://www.youtube.com/*', 'wss://ws.ptt.cc/*']);
-  await page.locator('#BBSWindow').waitFor({ state: 'visible' });
+  await page.locator('#TermWindow').waitFor({ state: 'visible' });
+  const terminalText = () => page.evaluate(() => {
+    const buf = window.app.buf;
+    return Array.from({ length: buf.rows }, (_, row) => buf.getRowText(row, 0, buf.cols)).join('\n');
+  });
+  const waitForTerminal = text => page.waitForFunction(text => {
+    const buf = window.app?.buf;
+    return buf && Array.from({ length: buf.rows }, (_, row) => buf.getRowText(row, 0, buf.cols)).join('\n').includes(text);
+  }, text);
   if (live) {
-    await page.waitForFunction(() => document.body.textContent.includes('請輸入代號'), null, { timeout: 20000 }).catch(async error => {
+    await waitForTerminal('請輸入代號').catch(async error => {
       await page.screenshot({ path: path.join(results, 'live-failure.png') });
-      console.log(JSON.stringify({ origin, handshakeStatus, bytesReceived, errors, text: await page.locator('body').innerText() }, null, 2));
+      console.log(JSON.stringify({ origin, handshakeStatus, bytesReceived, errors, text: await terminalText() }, null, 2));
       throw error;
     });
     assert.equal(handshakeStatus, 101, 'PTT must accept the direct WebSocket handshake');
     assert.equal(origin, 'app://ptt-classic', 'The browser must send the scoped Origin header');
     assert.ok(bytesReceived > 0, 'PTT must return terminal bytes');
   } else {
-    await page.getByText('PTT CLASSIC OFFLINE TEST', { exact: false }).waitFor();
-    assert.match(await page.locator('body').innerText(), /中文/);
+    await waitForTerminal('PTT CLASSIC OFFLINE TEST');
+    await page.locator('#mainContainer canvas').waitFor();
+    assert.match(await terminalText(), /中文/);
+    assert.equal(await page.evaluate(() => window.app.prefValues.termMargin), 12);
+    assert.equal(await page.evaluate(() => window.app.prefValues.mouseWheelAction), 'none');
+    assert.ok(await page.evaluate(() => localStorage.getItem('pttclassic.preferences.before-0.2.0')));
+    assert.deepEqual(await page.evaluate(() => window.app.getPluginList().map(plugin => plugin.id).sort()),
+      ['anti_idle', 'auto_wrap', 'easy_reading', 'input_helper', 'media_previewer']);
     await page.keyboard.press('ArrowUp');
     await page.keyboard.press('ArrowDown');
     await page.keyboard.type('abc');
     await page.keyboard.press('Enter');
+    await waitForSent(/\x1b\[A\x1b\[Babc\r/);
     assert.match(sent.join(''), /\x1b\[A\x1b\[Babc\r/);
 
-    const openMenu = () => page.locator('#BBSWindow').click({ button: 'right', position: { x: 100, y: 160 } });
+    const openMenu = async () => {
+      await page.locator('#TermWindow').click({ button: 'right', position: { x: 100, y: 160 } });
+      // Upstream ignores clicks for the menu's initial 350 ms to prevent click-through.
+      await page.waitForTimeout(380);
+    };
     await openMenu();
     await page.getByRole('menuitem', { name: '設定', exact: true }).click();
     const modal = page.locator('.PrefModal');
     await modal.waitFor({ state: 'visible' });
-    await modal.locator('input[name="fontFace"]').fill('monospace');
-    await modal.locator('input[name="bbsMargin"]').fill('12');
+    await modal.locator('.nav a').nth(1).click();
+    await modal.locator('input[name="termMargin"]').fill('18');
     await modal.locator('select[name="termSizeMode"]').selectOption('fixed-term-size');
     await page.screenshot({ path: path.join(results, 'classic-settings.png') });
     await modal.locator('.close:visible').click();
     await modal.waitFor({ state: 'hidden' });
-    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('pttchrome.pref.v1')).values.bbsMargin), 12);
+    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('pttchrome.pref.v1')).values.termMargin), 18);
     await page.reload();
-    await page.getByText('PTT CLASSIC OFFLINE TEST', { exact: false }).waitFor();
+    await waitForTerminal('PTT CLASSIC OFFLINE TEST');
     await openMenu();
     await page.getByRole('menuitem', { name: '設定', exact: true }).click();
-    assert.equal(await modal.locator('input[name="fontFace"]').inputValue(), 'monospace');
-    assert.equal(await modal.locator('input[name="bbsMargin"]').inputValue(), '12');
+    await modal.locator('.nav a').nth(1).click();
+    assert.equal(await modal.locator('input[name="termMargin"]').inputValue(), '18');
+    assert.equal(await page.evaluate(() => window.app.prefValues.fontFace), 'monospace');
+    await modal.locator('.nav a').nth(3).click();
+    assert.deepEqual(await modal.locator('input[type="checkbox"]').evaluateAll(inputs => inputs.map(input => input.name)), ['trimTrailingSpaces']);
+    assert.deepEqual(await modal.locator('select').evaluateAll(inputs => inputs.map(input => input.name)), ['rightClickAction', 'mouseWheelAction']);
+    const wheelSelector = modal.getByRole('combobox', { name: '滑鼠滾輪', exact: true });
+    assert.equal(await wheelSelector.inputValue(), 'none');
+    assert.deepEqual(await wheelSelector.locator('option').evaluateAll(options => options.map(option => option.value)),
+      ['arrow-1', 'arrow-2', 'arrow-3', 'arrow-5', 'page', 'none']);
+    await wheelSelector.selectOption('arrow-3');
+    await page.screenshot({ path: path.join(results, 'mouse-settings.png') });
+    await modal.locator('.nav a').nth(4).click();
+    assert.doesNotMatch(await modal.innerText(), /虛擬鍵盤|PWA|輔助登入|滑鼠瀏覽|Live文|開發者工具/);
+    await page.screenshot({ path: path.join(results, 'plugin-settings.png') });
+    const mediaSettings = modal.locator('.PrefModal__MacListItem').filter({ has: page.locator('input[name="enableMediaPreviewer"]') });
+    assert.equal(await mediaSettings.locator('input[type="range"]').count(), 0, 'Image size controls start folded');
+    await mediaSettings.locator('.PrefModal__MacOptionsBtn').click();
+    const heightSlider = mediaSettings.getByRole('slider', { name: '最大顯示高度' });
+    const widthSlider = mediaSettings.getByRole('slider', { name: '最大顯示寬度' });
+    const youtubeSlider = mediaSettings.getByRole('slider', { name: 'YouTube 顯示寬度' });
+    assert.equal(await mediaSettings.getByRole('slider').count(), 3);
+    assert.equal(await heightSlider.inputValue(), '80');
+    assert.equal(await widthSlider.inputValue(), '90');
+    assert.equal(await youtubeSlider.inputValue(), '800');
+    await page.screenshot({ path: path.join(results, 'image-size-settings.png'), animations: 'disabled' });
+    for (const slider of [heightSlider, widthSlider]) {
+      await slider.press('Home');
+      assert.equal(await slider.inputValue(), '10');
+      await slider.press('End');
+      await slider.press('ArrowLeft');
+      assert.equal(await slider.inputValue(), '99');
+      assert.equal(await slider.getAttribute('aria-valuetext'), '99%');
+    }
+    await youtubeSlider.press('End');
+    assert.equal(await youtubeSlider.inputValue(), '2560');
+    await youtubeSlider.press('Home');
+    assert.equal(await youtubeSlider.inputValue(), '240');
+    await youtubeSlider.press('ArrowRight');
+    assert.equal(await youtubeSlider.getAttribute('aria-valuetext'), '250 px');
+    assert.deepEqual(await mediaSettings.locator('output').allTextContents(), ['99%', '99%', '250 px']);
+    await modal.locator('.close:visible').click();
+    await modal.waitFor({ state: 'hidden' });
+    assert.deepEqual(await page.evaluate(() => {
+      const values = JSON.parse(localStorage.getItem('pttchrome.pref.v1')).values;
+      return [values.picPreviewMaxHeight, values.picPreviewMaxWidth, values.youtubePreviewWidth];
+    }), [99, 99, 250]);
+    await page.reload();
+    await waitForTerminal('PTT CLASSIC OFFLINE TEST');
+    assert.deepEqual(await page.evaluate(() => [window.app.prefValues.picPreviewMaxHeight, window.app.prefValues.picPreviewMaxWidth, window.app.prefValues.youtubePreviewWidth]), [99, 99, 250]);
+    assert.equal(await page.evaluate(() => window.app.mouseWheelAction), 'arrow-3', 'The chosen wheel action must survive a reload');
+    await openMenu();
+    await page.getByRole('menuitem', { name: '設定', exact: true }).click();
+    await modal.locator('.nav a').nth(3).click();
+    assert.equal(await wheelSelector.inputValue(), 'arrow-3');
+    await wheelSelector.selectOption('none');
+    await modal.locator('.nav a').nth(4).click();
+    await mediaSettings.locator('.PrefModal__MacOptionsBtn').click();
+    assert.equal(await heightSlider.inputValue(), '99');
+    assert.equal(await widthSlider.inputValue(), '99');
+    assert.equal(await youtubeSlider.inputValue(), '250');
     await modal.locator('.close:visible').click();
     await modal.waitFor({ state: 'hidden' });
 
     // Substitute the clipboard service so tests never read or replace the user's clipboard.
     await page.evaluate(() => {
-      Object.defineProperty(navigator, 'clipboard', { value: { readText: async () => 'paste fixture 中文' }, configurable: true });
+      Object.defineProperty(navigator, 'clipboard', { value: {
+        readText: async () => 'paste fixture 中文',
+        writeText: async text => { window.testCopiedText = text; },
+      }, configurable: true });
       document.execCommand = command => {
         if (command !== 'copy') return false;
         const data = new DataTransfer();
@@ -165,18 +264,55 @@ try {
     await openMenu();
     await page.getByRole('menuitem', { name: /貼上/ }).click();
     await page.waitForFunction(() => !document.querySelector('#cmenuReact .open'));
+    await waitForSent(/paste fixture \xa4\xa4\xa4\xe5/);
     assert.match(sent.join(''), /paste fixture \xa4\xa4\xa4\xe5/);
-    await page.getByText('PTT CLASSIC OFFLINE TEST', { exact: false }).evaluate(element => {
-      const selection = window.getSelection();
-      const range = document.createRange();
-      range.selectNodeContents(element);
-      selection.removeAllRanges();
-      selection.addRange(range);
-    });
-    await page.locator('#BBSWindow').dispatchEvent('contextmenu', { bubbles: true, clientX: 100, clientY: 160 });
+    await openMenu();
+    await page.getByRole('menuitem', { name: /全選/ }).click();
+    await openMenu();
     await page.getByRole('menuitem', { name: /^複製\s*Ctrl\+C$/ }).click();
     assert.match(await page.evaluate(() => window.testCopiedText), /PTT CLASSIC OFFLINE TEST/);
     await page.evaluate(() => window.getSelection().removeAllRanges());
+
+    const sentBeforeMouse = sent.join('');
+    const canvasBounds = await page.locator('#mainContainer canvas').boundingBox();
+    await page.mouse.move(canvasBounds.x + 2, canvasBounds.y + 12);
+    await page.mouse.down();
+    await page.mouse.move(canvasBounds.x + 300, canvasBounds.y + 12, { steps: 12 });
+    await page.mouse.up();
+    assert.match(await page.evaluate(() => window.app.view.getSelectedText()), /PTT CLASSIC/);
+    await page.locator('#mainContainer').click({ button: 'middle', position: { x: 20, y: 20 } });
+    await page.mouse.wheel(0, 350);
+    await page.locator('#mainContainer').dispatchEvent('wheel', { deltaY: 150, buttons: 1, bubbles: true });
+    await page.locator('#mainContainer').dispatchEvent('wheel', { deltaY: 150, buttons: 2, bubbles: true });
+    await page.waitForTimeout(200);
+    assert.equal(sent.join(''), sentBeforeMouse, 'Disabled mouse actions must not send PTT commands');
+
+    // Exercise every restored choice through the real settings UI and terminal socket.
+    for (const action of ['arrow-1', 'arrow-2', 'arrow-3', 'arrow-5', 'page', 'none']) {
+      await openMenu();
+      await page.getByRole('menuitem', { name: '設定', exact: true }).click();
+      await modal.locator('.nav a').nth(3).click();
+      await wheelSelector.selectOption(action);
+      await modal.locator('.close:visible').click();
+      await modal.waitFor({ state: 'hidden' });
+      assert.equal(await page.evaluate(() => window.app.mouseWheelAction), action);
+      const before = sent.join('').length;
+      const terminal = page.locator('#mainContainer');
+      for (const deltaY of [120, -120]) {
+        await terminal.dispatchEvent('wheel', { deltaY, buttons: 0, bubbles: true, cancelable: true });
+        for (const buttons of [1, 2, 3]) {
+          await terminal.dispatchEvent('wheel', { deltaY, buttons, bubbles: true, cancelable: true });
+        }
+      }
+      // A unique keyboard marker waits for socket delivery, including the no-action case.
+      const marker = `wheel-${action}`;
+      await page.keyboard.type(marker);
+      await waitForSent(new RegExp(`${marker}$`));
+      const lines = action.startsWith('arrow-') ? Number(action.split('-')[1]) : 0;
+      const expected = action === 'page' ? '\x1b[6~\x1b[5~' : '\x1b[B'.repeat(lines) + '\x1b[A'.repeat(lines);
+      assert.equal(sent.join('').slice(before), expected + marker,
+        'Only the regular wheel may send the selected navigation commands');
+    }
 
     for (const viewport of [{ width: 900, height: 600 }, { width: 1920, height: 1080 }]) {
       await page.setViewportSize(viewport);
@@ -200,6 +336,10 @@ try {
   if (page) {
     await page.screenshot({ path: path.join(results, `${live ? 'live' : 'offline'}-failure.png`) }).catch(() => {});
     console.error(await page.locator('body').innerText().catch(() => 'Page unavailable'));
+    console.error(await page.evaluate(() => ({
+      app: Boolean(window.app), plugins: window.app?.getPluginList?.().map(plugin => plugin.id),
+      terminal: document.querySelector('#TermWindow')?.outerHTML.slice(0, 1200),
+    })).catch(() => 'Diagnostics unavailable'));
   }
   throw error;
 } finally {

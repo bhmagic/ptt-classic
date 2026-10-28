@@ -1,0 +1,517 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import {
+  TRUSTED_IMAGE_DOMAINS,
+  mergeTrustedDomainsWithNewDefaults,
+  isTrustedImageDomain,
+  resolveImageUrl,
+  getImageRenderedSize,
+  getTop,
+  getLeft,
+  getPopupPosition,
+  updateImagePreviewMove,
+  initialImagePreviewState,
+  resetImagePreviewState,
+  getSharedImageObserver,
+  registerImageIntersection,
+  resetSharedImageObserverForTest,
+} from "../src/plugins/media_previewer/image_preview_util.js";
+
+test("isTrustedImageDomain correctly identifies trusted image domains and subdomains", () => {
+  // Direct trusted domains
+  assert.equal(isTrustedImageDomain("imgur.com"), true);
+  assert.equal(isTrustedImageDomain("i.imgur.com"), true);
+  assert.equal(isTrustedImageDomain("m.imgur.com"), true);
+  assert.equal(isTrustedImageDomain("imgtok.com"), true);
+  assert.equal(isTrustedImageDomain("i.imgtok.com"), true);
+  assert.equal(isTrustedImageDomain("meee.com.tw"), true);
+  assert.equal(isTrustedImageDomain("i.meee.com.tw"), true);
+  assert.equal(isTrustedImageDomain("duk.tw"), true);
+  assert.equal(isTrustedImageDomain("upload.cc"), true);
+  assert.equal(isTrustedImageDomain("ibb.co"), true);
+  assert.equal(isTrustedImageDomain("i.ibb.co"), true);
+  assert.equal(isTrustedImageDomain("imgbb.com"), true);
+  assert.equal(isTrustedImageDomain("postimg.cc"), true);
+  assert.equal(isTrustedImageDomain("i.postimg.cc"), true);
+  assert.equal(isTrustedImageDomain("pbs.twimg.com"), true);
+  assert.equal(isTrustedImageDomain("gyazo.com"), true);
+  assert.equal(isTrustedImageDomain("i.gyazo.com"), true);
+
+  // Untrusted / spoofed domains
+  assert.equal(isTrustedImageDomain("fakeimgur.com"), false);
+  assert.equal(isTrustedImageDomain("notmeee.com.tw"), false);
+  assert.equal(isTrustedImageDomain("evil.com"), false);
+  assert.equal(isTrustedImageDomain("192.168.1.1"), false);
+  assert.equal(isTrustedImageDomain("localhost"), false);
+  assert.equal(isTrustedImageDomain(""), false);
+  assert.equal(isTrustedImageDomain(null), false);
+});
+
+test("resolveImageUrl resolves Imgur links with or without extension", () => {
+  // With extension
+  assert.equal(
+    resolveImageUrl("https://i.imgur.com/abc1234.png"),
+    "https://i.imgur.com/abc1234.png",
+  );
+  // Without extension (defaults to jpg)
+  assert.equal(
+    resolveImageUrl("https://imgur.com/abc1234"),
+    "https://i.imgur.com/abc1234.jpg",
+  );
+  assert.equal(
+    resolveImageUrl("http://m.imgur.com/gallery/xyz987"),
+    "https://i.imgur.com/xyz987.jpg",
+  );
+});
+
+test("resolveImageUrl resolves modern PTT trusted hosts when whitelist is ON", () => {
+  assert.equal(
+    resolveImageUrl("https://meee.com.tw/photo1.png", true),
+    "https://meee.com.tw/photo1.png",
+  );
+  assert.equal(
+    resolveImageUrl("https://imgtok.com/i/abc.jpg", true),
+    "https://imgtok.com/i/abc.jpg",
+  );
+  assert.equal(
+    resolveImageUrl("https://duk.tw/demo.webp", true),
+    "https://duk.tw/demo.webp",
+  );
+  assert.equal(
+    resolveImageUrl("https://upload.cc/i1/2024/test.jpg", true),
+    "https://upload.cc/i1/2024/test.jpg",
+  );
+  assert.equal(
+    resolveImageUrl(
+      "https://pbs.twimg.com/media/F12345?format=jpg&name=orig",
+      true,
+    ),
+    "https://pbs.twimg.com/media/F12345?format=jpg&name=orig",
+  );
+});
+
+test("resolveImageUrl blocks untrusted domains when whitelist is ON", () => {
+  assert.equal(resolveImageUrl("https://evil.com/tracker.jpg", true), null);
+  assert.equal(resolveImageUrl("http://192.168.1.1/reboot.png", true), null);
+  assert.equal(resolveImageUrl("https://unknown-host.org/pic.png", true), null);
+});
+
+test("resolveImageUrl allows untrusted image extensions when whitelist is OFF", () => {
+  assert.equal(
+    resolveImageUrl("https://arbitrary-host.com/picture.jpg", false),
+    "https://arbitrary-host.com/picture.jpg",
+  );
+  assert.equal(
+    resolveImageUrl("https://arbitrary-host.com/picture.png?w=800", false),
+    "https://arbitrary-host.com/picture.png?w=800",
+  );
+});
+
+test("resolveImageUrl rejects non-image or invalid URLs regardless of whitelist", () => {
+  assert.equal(resolveImageUrl("https://google.com", false), null);
+  assert.equal(resolveImageUrl("https://imgur.com/evil.html", false), null);
+  assert.equal(resolveImageUrl("javascript:alert(1)", false), null);
+  assert.equal(resolveImageUrl("not-a-url", false), null);
+  assert.equal(resolveImageUrl("", false), null);
+  assert.equal(resolveImageUrl(null, false), null);
+});
+
+test("getImageRenderedSize accurately scales images based on aspect ratio and viewport", () => {
+  // 1. Image fits within bounds (no scaling)
+  const fit = getImageRenderedSize(400, 300, 1000, 1000);
+  assert.equal(fit.width, 400);
+  assert.equal(fit.height, 300);
+
+  // 2. Tall portrait mobile screenshot (1080x2400) constrained by maxH (80% of 1080 = 864)
+  const tall = getImageRenderedSize(1080, 2400, 1920, 1080);
+  assert.equal(tall.height, 864);
+  assert.equal(tall.width, 1080 * (864 / 2400));
+
+  // 3. Wide landscape image (2000x1000) constrained by maxW (90% of 1000 = 900)
+  const wide = getImageRenderedSize(2000, 1000, 1000, 800);
+  assert.equal(wide.width, 900);
+  assert.equal(wide.height, 450);
+
+  // 4. Missing width fallback
+  const fallback = getImageRenderedSize(undefined, 2000, 1000, 800);
+  assert.equal(fallback.height, 640);
+  assert.equal(fallback.width, 900);
+});
+
+test("getTop fixes Issue #120 and cleanly clamps image preview within page bounds", () => {
+  const pageHeight = 900;
+
+  // Issue #120 regression test: tall image hovered near bottom
+  // Old logic returned negative numbers (e.g. 900 - 20 - 2400 = -1520), jumping outside the top border.
+  // New logic clamps properly to stay inside [20, pageHeight - 20 - height]
+  const topBottomHover = getTop(850, 720, pageHeight);
+  assert.equal(topBottomHover, 160); // 900 - 20 - 720 = 160 >= 20
+  assert(topBottomHover >= 20);
+
+  // Unscaled height passed directly
+  const unscaled = getTop(850, 2400, pageHeight);
+  assert.equal(unscaled, 160);
+  assert(unscaled >= 20);
+
+  // Hover near top boundary: clamped to top margin 20
+  const topNearTop = getTop(50, 300, pageHeight);
+  assert.equal(topNearTop, 20);
+
+  // Hover in middle: perfectly centered on cursor
+  const topMiddle = getTop(500, 300, pageHeight);
+  assert.equal(topMiddle, 350); // 500 - 150 = 350
+});
+
+test("getLeft keeps preview in viewport and flips to cursor left if exceeding page width", () => {
+  const pageWidth = 1000;
+
+  // Normal position: 20px right of cursor
+  assert.equal(getLeft(200, 300, pageWidth), 220);
+
+  // Near right edge: flips to left of cursor
+  // 800 + 20 + 300 = 1120 > 980 -> flips to 800 - 20 - 300 = 480
+  assert.equal(getLeft(800, 300, pageWidth), 480);
+
+  // Very wide image near right edge: clamped to minimum margin 20
+  assert.equal(getLeft(900, 950, pageWidth), 20);
+});
+
+test("getPopupPosition positions popup next to cursor and flips if near right edge", () => {
+  const pageWidth = 1000;
+  const pageHeight = 800;
+
+  // Normal position: 20px right of cursor
+  const normal = getPopupPosition(200, 300, 200, 36, pageWidth, pageHeight);
+  assert.equal(normal.left, 220);
+  assert.equal(normal.top, 282); // 300 - 18
+
+  // Near right edge: flips to left of cursor
+  const flipped = getPopupPosition(850, 300, 200, 36, pageWidth, pageHeight);
+  assert.equal(flipped.left, 630); // 850 - 20 - 200 = 630
+
+  // Clamped at top and bottom margins
+  const topClamped = getPopupPosition(100, 10, 200, 36, pageWidth, pageHeight);
+  assert.equal(topClamped.top, 20);
+
+  const bottomClamped = getPopupPosition(
+    100,
+    790,
+    200,
+    36,
+    pageWidth,
+    pageHeight,
+  );
+  assert.equal(bottomClamped.top, 744); // 800 - 20 - 36 = 744
+});
+
+test("updateImagePreviewMove anchors position and avoids jittering on mouse move", () => {
+  const activeState = {
+    currentImagePreview: Promise.resolve({ src: "test.jpg" }),
+    previewHref: "https://example.com/test.jpg",
+    left: 200,
+    top: 300,
+  };
+
+  // Once left and top are anchored, mouse move should return null (no re-render or canvas redraw)
+  assert.equal(updateImagePreviewMove(activeState, 205, 305), null);
+
+  // If left or top is undefined (unanchored), updates position
+  const unanchoredState = {
+    currentImagePreview: Promise.resolve({ src: "test.jpg" }),
+    previewHref: "https://example.com/test.jpg",
+    left: undefined,
+    top: undefined,
+  };
+  assert.deepEqual(updateImagePreviewMove(unanchoredState, 205, 305), {
+    left: 205,
+    top: 305,
+  });
+
+  // If no preview is active, returns null
+  assert.equal(
+    updateImagePreviewMove(initialImagePreviewState, 205, 305),
+    null,
+  );
+});
+
+test("registerImageIntersection falls back gracefully when IntersectionObserver is undefined", () => {
+  resetSharedImageObserverForTest();
+  const prevObserver = globalThis.IntersectionObserver;
+  try {
+    delete globalThis.IntersectionObserver;
+    assert.equal(getSharedImageObserver(), null);
+
+    let called = false;
+    const dummyElement = {};
+    const unregister = registerImageIntersection(dummyElement, () => {
+      called = true;
+    });
+
+    assert.equal(called, true);
+    assert.equal(typeof unregister, "function");
+  } finally {
+    if (prevObserver) {
+      globalThis.IntersectionObserver = prevObserver;
+    }
+  }
+});
+
+test("getSharedImageObserver manages shared singleton with rootMargin", () => {
+  resetSharedImageObserverForTest();
+
+  class MockIntersectionObserver {
+    constructor(callback, options) {
+      this.callback = callback;
+      this.options = options;
+      this.observed = new Set();
+      this.disconnected = false;
+    }
+    observe(el) {
+      this.observed.add(el);
+    }
+    unobserve(el) {
+      this.observed.delete(el);
+    }
+    disconnect() {
+      this.disconnected = true;
+      this.observed.clear();
+    }
+  }
+
+  const prevObserver = globalThis.IntersectionObserver;
+  try {
+    globalThis.IntersectionObserver = MockIntersectionObserver;
+
+    const obs1 = getSharedImageObserver();
+    assert(obs1 instanceof MockIntersectionObserver);
+    assert.equal(obs1.options.rootMargin, "300px 0px");
+
+    const obs2 = getSharedImageObserver();
+    assert.equal(obs1, obs2, "should reuse shared singleton");
+
+    const element = {};
+    let triggered = false;
+    const unregister = registerImageIntersection(element, () => {
+      triggered = true;
+    });
+
+    assert.equal(obs1.observed.has(element), true);
+    assert.equal(triggered, false);
+
+    // Simulate element entering viewport
+    obs1.callback([{ target: element, isIntersecting: true }]);
+    assert.equal(triggered, true);
+    assert.equal(
+      obs1.observed.has(element),
+      false,
+      "should unobserve after intersecting",
+    );
+
+    // Test unregister cleanup before intersecting
+    const element2 = {};
+    let triggered2 = false;
+    const unregister2 = registerImageIntersection(element2, () => {
+      triggered2 = true;
+    });
+    assert.equal(obs1.observed.has(element2), true);
+    unregister2();
+    assert.equal(
+      obs1.observed.has(element2),
+      false,
+      "should unobserve on cleanup",
+    );
+    assert.equal(triggered2, false);
+
+    resetSharedImageObserverForTest();
+    assert.equal(obs1.disconnected, true);
+  } finally {
+    if (prevObserver) {
+      globalThis.IntersectionObserver = prevObserver;
+    } else {
+      delete globalThis.IntersectionObserver;
+    }
+    resetSharedImageObserverForTest();
+  }
+});
+
+test("normalizeDomain and parseTrustedDomains clean and deduplicate domain inputs", async () => {
+  const { normalizeDomain, parseTrustedDomains } = await import(
+    "../src/plugins/media_previewer/image_preview_util.js"
+  );
+
+  assert.equal(normalizeDomain("  IMGUR.COM  "), "imgur.com");
+  assert.equal(normalizeDomain("https://i.imgur.com/abc.jpg"), "i.imgur.com");
+  assert.equal(normalizeDomain("http://example.com:8080/path"), "example.com");
+  assert.equal(normalizeDomain(".sub.domain.org."), "sub.domain.org");
+  assert.equal(normalizeDomain(""), "");
+  assert.equal(normalizeDomain(null), "");
+
+  assert.deepEqual(
+    parseTrustedDomains(["imgur.com", "https://meee.com.tw/pic.png", "IMGUR.COM"]),
+    ["imgur.com", "meee.com.tw"],
+  );
+  assert.deepEqual(
+    parseTrustedDomains("foo.com, bar.org  baz.net"),
+    ["foo.com", "bar.org", "baz.net"],
+  );
+  assert.deepEqual(parseTrustedDomains(undefined), TRUSTED_IMAGE_DOMAINS);
+  assert.deepEqual(parseTrustedDomains([]), []);
+});
+
+test("isTrustedImageDomain and resolveImageUrl support custom trustedDomains list", () => {
+  const customList = ["my-custom-host.org", "cdn.another-host.net"];
+
+  assert.equal(isTrustedImageDomain("my-custom-host.org", customList), true);
+  assert.equal(isTrustedImageDomain("img.my-custom-host.org", customList), true);
+  assert.equal(isTrustedImageDomain("imgur.com", customList), false);
+
+  assert.equal(
+    resolveImageUrl("https://img.my-custom-host.org/pic.png", true, customList),
+    "https://img.my-custom-host.org/pic.png",
+  );
+  assert.equal(
+    resolveImageUrl("https://i.imgur.com/pic.png", true, customList),
+    null,
+  );
+});
+
+test("TrustedDomainManager allows adding, removing, and restoring default domains, and integrates with MediaPreviewer.renderOptions", async () => {
+  const { MediaPreviewer, TrustedDomainManager } = await import(
+    "../src/plugins/media_previewer/MediaPreviewer.js"
+  );
+  const { EventEmitter } = await import("../src/js/event.js");
+
+  let currentDomains = ["imgur.com", "meee.com.tw"];
+  const manager = new TrustedDomainManager({
+    value: currentDomains,
+    onChange: (next) => {
+      currentDomains = next;
+    },
+  });
+
+  assert.deepEqual(manager.getDomainList(), ["imgur.com", "meee.com.tw"]);
+
+  // 1. Add a new domain (including URL normalization)
+  manager.state.customInput = "https://custom-pic.tw/test.jpg, imgur.com";
+  manager.handleAdd();
+  assert.deepEqual(currentDomains, ["imgur.com", "meee.com.tw", "custom-pic.tw"]);
+
+  // 2. Remove a domain by index
+  manager.props.value = currentDomains;
+  manager.handleRemove(1); // remove meee.com.tw
+  assert.deepEqual(currentDomains, ["imgur.com", "custom-pic.tw"]);
+
+  // 3. Restore default domains
+  manager.props.value = currentDomains;
+  manager.handleRestoreDefault();
+  assert.deepEqual(currentDomains, TRUSTED_IMAGE_DOMAINS);
+
+  // 4. Verify MediaPreviewer.renderOptions renders TrustedDomainManager and updates picPreviewTrustedDomains
+  let changedKey = null;
+  let changedVal = null;
+  const rendered = MediaPreviewer.renderOptions({
+    values: {
+      picPreviewWhitelistOnly: true,
+      picPreviewTrustedDomains: ["custom1.com"],
+    },
+    handleCheckboxChange: () => {},
+    handleValueChange: (key, val) => {
+      changedKey = key;
+      changedVal = val;
+    },
+  });
+  const children = Array.isArray(rendered.props.children)
+    ? rendered.props.children
+    : [rendered.props.children];
+  const domainManagerEl = children.find(
+    (c) => c && c.type === TrustedDomainManager,
+  );
+  assert(domainManagerEl, "MediaPreviewer.renderOptions should render TrustedDomainManager");
+  assert.deepEqual(domainManagerEl.props.value, ["custom1.com"]);
+
+  domainManagerEl.props.onChange(["custom1.com", "custom2.org"]);
+  assert.equal(changedKey, "picPreviewTrustedDomains");
+  assert.deepEqual(changedVal, ["custom1.com", "custom2.org"]);
+
+  // 5. Verify MediaPreviewer runtime responds to term:pref-change for picPreviewTrustedDomains
+  const mockApp = new EventEmitter();
+  mockApp.prefValues = {
+    enableMediaPreviewer: true,
+    picPreviewWhitelistOnly: true,
+    picPreviewTrustedDomains: ["only-this-host.com"],
+  };
+  const plugin = new MediaPreviewer(mockApp, { enabled: true });
+  plugin.init({ app: mockApp });
+  assert.equal(
+    plugin.resolveImageUrl("https://only-this-host.com/a.jpg"),
+    "https://only-this-host.com/a.jpg",
+  );
+  assert.equal(
+    plugin.resolveImageUrl("https://i.imgur.com/a.jpg"),
+    null,
+  );
+
+  mockApp.emit("term:pref-change", {
+    key: "picPreviewTrustedDomains",
+    value: ["i.imgur.com"],
+  });
+  assert.equal(
+    plugin.resolveImageUrl("https://i.imgur.com/a.jpg"),
+    "https://i.imgur.com/a.jpg",
+  );
+  assert.equal(
+    plugin.resolveImageUrl("https://only-this-host.com/a.jpg"),
+    null,
+  );
+});
+
+test("mergeTrustedDomainsWithNewDefaults auto-adds newly introduced default domains while preserving user edits", async () => {
+  // Simulate user who deleted 'imgtok.com' and 'meee.com.tw' from original defaults, and added 'my-custom.site'
+  const userSavedDomains = [
+    "imgur.com",
+    "duk.tw",
+    "upload.cc",
+    "ibb.co",
+    "imgbb.com",
+    "postimg.cc",
+    "twimg.com",
+    "gyazo.com",
+    "my-custom.site",
+  ];
+  const savedKnownDefaults = [...TRUSTED_IMAGE_DOMAINS];
+
+  // Future version adds two new default sites: 'new-host-1.com' and 'new-host-2.org'
+  const futureDefaults = [
+    ...TRUSTED_IMAGE_DOMAINS,
+    "new-host-1.com",
+    "new-host-2.org",
+  ];
+
+  const merged = mergeTrustedDomainsWithNewDefaults(
+    userSavedDomains,
+    savedKnownDefaults,
+    futureDefaults,
+  );
+
+  // 1. User's custom site is preserved
+  assert(merged.includes("my-custom.site"), "Custom domain should be preserved");
+  // 2. Deleted default sites remain deleted
+  assert(!merged.includes("imgtok.com"), "Deleted default imgtok.com should stay deleted");
+  assert(!merged.includes("meee.com.tw"), "Deleted default meee.com.tw should stay deleted");
+  // 3. Newly added default sites are automatically appended
+  assert(merged.includes("new-host-1.com"), "New default new-host-1.com should be added");
+  assert(merged.includes("new-host-2.org"), "New default new-host-2.org should be added");
+
+  // Legacy save fallback (when savedKnownDefaults is undefined)
+  const mergedLegacy = mergeTrustedDomainsWithNewDefaults(
+    userSavedDomains,
+    undefined,
+    futureDefaults,
+  );
+  assert(!mergedLegacy.includes("imgtok.com"), "Legacy save deleted default should stay deleted");
+  assert(mergedLegacy.includes("my-custom.site"), "Legacy save custom domain should be preserved");
+  assert(mergedLegacy.includes("new-host-1.com"), "Legacy save should receive newly added default domain");
+});
+
+
+

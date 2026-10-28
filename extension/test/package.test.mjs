@@ -28,6 +28,7 @@ test('the unpacked folder has every referenced resource and no remote executable
   }
   for (const [file, info] of Object.entries(buildInfo.metafile.outputs)) {
     for (const imported of info.imports) {
+      if (file.endsWith('.css') && imported.path.startsWith('data:image/')) continue;
       assert.equal(imported.external, undefined, `${file} must bundle ${imported.path}`);
       await stat(path.resolve(root, 'extension', imported.path.split(/[?#]/)[0]));
     }
@@ -35,7 +36,11 @@ test('the unpacked folder has every referenced resource and no remote executable
   assert.match(manifest.content_security_policy.extension_pages, /script-src 'self';/);
   assert.doesNotMatch(manifest.content_security_policy.extension_pages, /unsafe-eval|unsafe-inline/);
   assert.match(await read('LICENSE'), /GNU GENERAL PUBLIC LICENSE/);
-  assert.match(await read('THIRD-PARTY-NOTICES.txt'), /react@16\.14\.0/);
+  assert.match(await read('THIRD-PARTY-NOTICES.txt'), /preact@10\.29\.8/);
+  assert.doesNotMatch(await read('THIRD-PARTY-NOTICES.txt'), /react@16|bootstrap@|jquery@/);
+  assert.match(html, /id="TermWindow"/);
+  assert.doesNotMatch(html, /manifest\.webmanifest|\/src\/entry/);
+  assert.equal(JSON.parse(await read('PTT-TERM-UPSTREAM.json')).commit, buildInfo.baseline);
   assert.ok(!(await read('THIRD-PARTY-NOTICES.txt')).includes('undefined@undefined'), 'Dependency notices must identify their packages');
 });
 

@@ -1,23 +1,29 @@
 import React from "react";
-import { Alert, Button } from "react-bootstrap";
-import { i18n } from "../js/i18n";
+import { _ } from "../js/i18n";
 import "./PageTopAlert.css";
 
 export const PasteShortcutAlert = ({ onDismiss }) => (
-  <Alert
-    bsStyle="info"
-    className="PageTopAlert"
+  <div
+    role="alert"
+    className="alert alert-info alert-dismissible PageTopAlert"
     tabIndex={-1}
-    onDismiss={onDismiss}
   >
-    <h4>{i18n("alert_pasteShortcutHeader")}</h4>
-    <p>{i18n("alert_pasteShortcutText")}</p>
+    <button
+      type="button"
+      className="close"
+      aria-label="Close"
+      onClick={onDismiss}
+    >
+      <span aria-hidden="true">&times;</span>
+    </button>
+    <h4>{_("alert_pasteShortcutHeader")}</h4>
+    <p>{_("alert_pasteShortcutText")}</p>
     <p>
-      <Button bsStyle="primary" onClick={onDismiss}>
-        {i18n("alert_pasteShortcutClose")}
-      </Button>
+      <button type="button" className="btn btn-primary" onClick={onDismiss}>
+        {_("alert_pasteShortcutClose")}
+      </button>
     </p>
-  </Alert>
+  </div>
 );
 
 export default PasteShortcutAlert;

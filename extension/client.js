@@ -1,5 +1,8 @@
-import './globals.js';
-import 'bootstrap/dist/js/bootstrap.js';
-import 'bootstrap/dist/css/bootstrap.css';
-import '../src/entry.js';
-import './vendor/ptt-media-preview/src/term.js';
+// Configure the extension before upstream main constructs the terminal.
+import '../src/js/browser_compat.js';
+import './configure.js';
+import '../src/css/ui.css';
+import '../src/css/main.css';
+import '../src/css/color.css';
+import './media.css';
+import '../src/js/main.js';

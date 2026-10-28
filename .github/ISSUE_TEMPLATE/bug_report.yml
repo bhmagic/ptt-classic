@@ -1,0 +1,223 @@
+name: 問題回報 (Bug Report)
+description: 回報 ptt-term 的異常現象或程式錯誤
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感謝您協助回報問題！請盡可能提供詳細資訊，以利我們重現與排查問題。
+
+  - type: dropdown
+    id: site
+    attributes:
+      label: 連線站台 (Target Site)
+      description: 請問發生問題時連線的站台是？（若由「設定」視窗點擊「問題回報」，下方環境資訊已自動包含，此項可略過）
+      options:
+        - term.ptt.cc (PTT)
+        - term.ptt2.cc (PTT2)
+        - 本機開發測試 (localhost / 自架)
+        - 其他（請在補充資訊說明）
+    validations:
+      required: false
+
+  - type: input
+    id: occurrence-date
+    attributes:
+      label: 發生日期 (Date of Occurrence)
+      description: 請填寫發生問題的日期（例如：2026-09-10；若為當天可直接留空，以 Issue 建立日期為準）
+      placeholder: 例如：2026-09-10（留空代表當天）
+    validations:
+      required: false
+
+  - type: dropdown
+    id: client-type
+    attributes:
+      label: 執行環境 (PWA or Web)
+      description: 您是在一般瀏覽器分頁中使用，還是已安裝為 PWA？（若由「設定」視窗點擊「問題回報」可略過）
+      options:
+        - Web（一般瀏覽器分頁內使用）
+        - PWA（已安裝成獨立 App 或桌面/手機「加入主畫面」）
+    validations:
+      required: false
+
+  - type: dropdown
+    id: client-mode
+    attributes:
+      label: 顯示模式 (Mobile or Desktop mode)
+      description: 當前使用的是電腦版模式還是行動版（觸控）模式？（若由「設定」視窗點擊「問題回報」可略過）
+      options:
+        - Desktop mode（電腦版模式）
+        - Mobile mode（行動版模式 / 觸控介面）
+    validations:
+      required: false
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: 作業系統 (Operating System)
+      description: 請選擇您的作業系統（若由「設定」視窗點擊「問題回報」可略過）
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Android
+        - iOS
+        - iPadOS
+        - ChromeOS
+        - 其他
+    validations:
+      required: false
+
+  - type: input
+    id: os-version
+    attributes:
+      label: 作業系統詳細版本 (OS Version)
+      description: 例如：Windows 11 23H2, macOS 14.5, iOS 17.5, Ubuntu 24.04（若由「設定」視窗點擊「問題回報」將會自動填入）
+      placeholder: 例如：Windows 11 23H2
+    validations:
+      required: false
+
+  - type: dropdown
+    id: browser
+    attributes:
+      label: 瀏覽器種類 (Browser)
+      description: 請選擇發生問題的瀏覽器（若由「設定」視窗點擊「問題回報」可略過）
+      options:
+        - Google Chrome
+        - Microsoft Edge
+        - Apple Safari
+        - Mozilla Firefox
+        - Brave
+        - Kiwi Browser
+        - 系統內建 WebView
+        - 其他
+    validations:
+      required: false
+
+  - type: input
+    id: browser-version
+    attributes:
+      label: 瀏覽器詳細版本 (Browser Version)
+      description: 例如：Chrome 128.0.6613.119（若由「設定」視窗點擊「問題回報」將會自動填入）
+      placeholder: 例如：Chrome 128.0
+    validations:
+      required: false
+
+  - type: dropdown
+    id: render-engine-type
+    attributes:
+      label: 渲染引擎種類 (Render Engine Type)
+      description: 請選擇發生問題時所使用的渲染引擎。若未自行設定，預設即為 Canvas Engine。（若由「設定」視窗點擊「問題回報」，下方環境資訊已自動包含，此項可略過）
+      options:
+        - Canvas Engine（預設）
+        - DOM Engine
+    validations:
+      required: false
+
+  - type: dropdown
+    id: term-size-mode
+    attributes:
+      label: 終端機大小與縮放模式 (Terminal Size Mode)
+      description: 請選擇目前設定的終端機大小或縮放模式。（若由「設定」視窗點擊「問題回報」，下方環境資訊已自動包含，此項可略過）
+      options:
+        - 固定終端機大小 (Fixed Terminal Size)（預設）
+        - 固定字型大小 (Fixed Font Size)
+        - 固定終端機大小 + 把字體拉大來補滿畫面 (Fixed Terminal Size + fontFitWindowWidth)
+        - 其他 / 不確定
+    validations:
+      required: false
+
+  - type: input
+    id: build-info
+    attributes:
+      label: 建置資訊 (Build Info)
+      description: |
+        請提供軟體的完整 Build 資訊（包含 commit hash 與日期，一般版本號如 2.0.1 較無除錯參考價值）。
+        💡 建議方式：在終端機任意處按滑鼠右鍵（或觸控點擊工具列選單）選擇「設定」➜ 直接點擊左下角（或「關於」分頁內）的「問題回報」按鈕，即可自動帶入此建置資訊與環境！亦可由設定視窗左下角或「關於」分頁複製「Build: xxxxxxxx YYYY-MM-DD」。
+      placeholder: "例如：Build: 94cc98b8 2026-09-10"
+    validations:
+      required: false
+
+  - type: textarea
+    id: env-info
+    attributes:
+      label: 環境與用戶端資訊 (Environment & User Agent)
+      description: |
+        系統與瀏覽器環境診斷資訊（包含 User Agent、連線站台、模式、螢幕解析度與繪圖引擎等）。
+        💡 若從「設定」視窗點擊「問題回報」開啟，此區塊將會自動填入，無需手動輸入。
+      render: shell
+    validations:
+      required: false
+
+  - type: input
+    id: ime-keyboard
+    attributes:
+      label: 輸入法或鍵盤 (IME / Keyboard)
+      description: 若問題與文字輸入、換行、游標跳動或快捷鍵有關，請說明使用的輸入法（例如：微軟注音、Gboard、同文輸入法、倉頡等）
+      placeholder: 例如：微軟新注音
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: extra-settings
+    attributes:
+      label: 相關特殊設定 (Relevant Settings)
+      description: 請勾選目前有開啟或調整的特殊選項（若由「設定」視窗點擊「問題回報」，下方環境資訊已自動包含，此項可略過）
+      options:
+        - label: 變更「終端機大小與縮放模式 (termSizeMode)」（如：固定字體大小）
+        - label: 開啟「把字體拉大來補滿畫面 (fontFitWindowWidth)」
+        - label: 變更「文字游標樣式 (Caret Style)」（如：半高方塊、實心方塊、垂直線）
+        - label: 開啟「平滑 ANSI 圖形 (smoothAnsiArt)」
+        - label: 使用自訂字型 (Custom Font)
+        - label: 啟用自訂色彩盤 / 高對比色
+        - label: 啟用螢幕輔助虛擬按鍵 (Virtual Keys)
+
+  - type: textarea
+    id: reproduction-steps
+    attributes:
+      label: 完整重現步驟 (Steps to Reproduce)
+      description: 請一步一步列出如何重現這個問題
+      placeholder: |
+        1. 連線進入 PTT 並登入
+        2. 前往 ... 看板或文章
+        3. 按下 ... 按鍵或點擊 ...
+        4. 發生異常
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual-result
+    attributes:
+      label: 錯誤的結果 / 實際現象 (Actual Behavior)
+      description: 請描述實際看到了什麼錯誤現象或非預期行為
+      placeholder: 例如：畫面字元重疊跑版、按鍵無反應、黑畫面、文字被截斷...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-result
+    attributes:
+      label: 預期發生的正確行為 (Expected Behavior)
+      description: 您預期正常的運作行為應該是什麼？
+      placeholder: 例如：按 Enter 後應正常換行...
+    validations:
+      required: true
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: 螢幕截圖或錄影 (Screenshots / Screen Recording)
+      description: 若有截圖或螢幕錄影，可直接複製圖片並貼在下方（Paste 或 Drag & Drop）
+      placeholder: 直接在此貼上圖片即可
+    validations:
+      required: false
+
+  - type: textarea
+    id: console-logs
+    attributes:
+      label: 瀏覽器主控台訊息 (Browser Console Logs)
+      description: 若在電腦版，請按 F12 開啟開發者工具，並複製 Console 分頁中顯示的紅色錯誤訊息 (Errors / Exceptions)
+      render: shell
+    validations:
+      required: false

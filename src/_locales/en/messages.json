@@ -1,0 +1,881 @@
+{
+  "appName": {
+    "message": "PTT Term",
+    "description": "The title of the application, displayed in the web store."
+  },
+  "menu_settings": {
+    "message": "Settings"
+  },
+  "cmenu_copy": {
+    "message": "Copy"
+  },
+  "cmenu_copyAnsi": {
+    "message": "Copy with ANSI colors"
+  },
+  "cmenu_paste": {
+    "message": "Paste"
+  },
+  "cmenu_selectAll": {
+    "message": "Select all"
+  },
+  "cmenu_searchGoogle": {
+    "message": "Search Google for"
+  },
+  "cmenu_openUrlNewTab": {
+    "message": "Open link in new tab"
+  },
+  "cmenu_copyLinkUrl": {
+    "message": "Copy link address"
+  },
+  "cmenu_mouseBrowsing": {
+    "message": "Mouse browsing"
+  },
+  "cmenu_easyReading": {
+    "message": "Easy Reading"
+  },
+  "cmenu_showInputHelper": {
+    "message": "Input helper ..."
+  },
+  "cmenu_showLiveArticleHelper": {
+    "message": "Live article helper ..."
+  },
+  "cmenu_login_assist": {
+    "message": "Login Assist ..."
+  },
+  "cmenu_auto_login": {
+    "message": "Login Assist ..."
+  },
+  "cmenu_settings": {
+    "message": "Settings"
+  },
+  "cmenu_bug_report": {
+    "message": "Bug Report"
+  },
+  "options_general": {
+    "message": "General"
+  },
+  "options_plugins": {
+    "message": "Add-ons"
+  },
+  "options_plugins_desc": {
+    "message": "Manage extended features and custom modules"
+  },
+  "options_expand": {
+    "message": "Expand options"
+  },
+  "options_collapse": {
+    "message": "Collapse options"
+  },
+  "options_plugin_options": {
+    "message": "Options..."
+  },
+  "options_about": {
+    "message": "About"
+  },
+  "plugin_group_ui": {
+    "message": "User Interface"
+  },
+  "plugin_group_bbs": {
+    "message": "Taiwan BBS"
+  },
+  "plugin_group_debug": {
+    "message": "Debug & Development"
+  },
+  "plugin_group_other": {
+    "message": "Other"
+  },
+  "plugin_easy_reading_title": {
+    "message": "Easy Reading"
+  },
+  "plugin_easy_reading_desc": {
+    "message": "Automatically stitch article pages for continuous scrolling, with inline image/video previews and live push updates."
+  },
+  "plugin_live_update_title": {
+    "message": "Live Article Helper"
+  },
+  "plugin_live_update_desc": {
+    "message": "Periodically refreshes comments while reading posts (e.g. sends 'r' every second), with hotkeys and floating controls."
+  },
+  "plugin_anti_idle_title": {
+    "message": "Anti-Idle Keepalive"
+  },
+  "plugin_anti_idle_desc": {
+    "message": "Periodically sends keepalive signals to the BBS site when idle to prevent disconnects."
+  },
+  "plugin_auto_wrap_title": {
+    "message": "AutoWrap"
+  },
+  "plugin_auto_wrap_desc": {
+    "message": "Automatically wrap lines when pasting text longer than the specified limit."
+  },
+  "plugin_media_previewer_title": {
+    "message": "Media & Image Previewer"
+  },
+  "plugin_media_previewer_desc": {
+    "message": "Shows image and media popup preview on hover, supporting Imgur and trusted domain whitelist."
+  },
+  "plugin_packet_dump_title": {
+    "message": "Packet Dump"
+  },
+  "plugin_packet_dump_desc": {
+    "message": "Captures and displays raw WebSocket / Telnet hexadecimal packet streams in real time."
+  },
+  "plugin_fps_meter_title": {
+    "message": "FPS Meter"
+  },
+  "plugin_fps_meter_desc": {
+    "message": "Monitor terminal render framerate (FPS) and render duration in real time, with Canvas/DOM and Smooth ANSI toggles."
+  },
+  "plugin_touch_debug_hud_title": {
+    "message": "Touch & Keyboard Debug HUD"
+  },
+  "plugin_touch_debug_hud_desc": {
+    "message": "On-screen diagnostic HUD tracking mobile touch events, virtual keyboard state, viewport metrics, and one-click diagnostic report copying."
+  },
+  "plugin_mouse_browsing_title": {
+    "message": "Mouse Browsing"
+  },
+  "plugin_mouse_browsing_desc": {
+    "message": "Navigate BBS with mouse clicks and wheel scrolling, supporting click to enter boards/articles, text selection, and row highlighting."
+  },
+  "plugin_input_helper_title": {
+    "message": "Input Helper"
+  },
+  "plugin_input_helper_desc": {
+    "message": "Visual input palette for ANSI color codes, special symbols, fullwidth punctuation, and emoticons."
+  },
+  "plugin_login_assist_title": {
+    "message": "Login Assist"
+  },
+  "plugin_login_assist_desc": {
+    "message": "Prompt login modal to autofill and remember credentials with browser password manager and typeahead into terminal."
+  },
+  "plugin_auto_login_title": {
+    "message": "Login Assist"
+  },
+  "plugin_auto_login_desc": {
+    "message": "Prompt login modal to autofill and remember credentials with browser password manager and typeahead into terminal."
+  },
+  "login_modal_title": {
+    "message": "Login"
+  },
+  "login_modal_desc": {
+    "message": "Use browser password manager to autofill or save credentials. Passwords are not saved by the app. Press Cancel to register a new account."
+  },
+  "login_modal_username": {
+    "message": "Username"
+  },
+  "login_modal_password": {
+    "message": "Password"
+  },
+  "login_modal_username_placeholder": {
+    "message": "Enter username"
+  },
+  "login_modal_password_placeholder": {
+    "message": "Enter password"
+  },
+  "login_modal_submit": {
+    "message": "Login"
+  },
+  "login_modal_cancel": {
+    "message": "Cancel"
+  },
+  "login_modal_disable": {
+    "message": "Disable"
+  },
+  "login_modal_logging_in": {
+    "message": "Logging in..."
+  },
+  "options_picPreviewWhitelistOnly": {
+    "message": "Only preview images from trusted image hosts (Security & Privacy)"
+  },
+  "options_trustedDomains_title": {
+    "message": "Allowed Image Host Domains"
+  },
+  "options_trustedDomains_placeholder": {
+    "message": "Enter domain (e.g. imgur.com)"
+  },
+  "options_trustedDomains_empty": {
+    "message": "No trusted image host domains configured."
+  },
+  "imagePreview_loading": {
+    "message": "Loading image..."
+  },
+  "imagePreview_failed": {
+    "message": "Failed to load image preview"
+  },
+  "options_warnBeforeClose": {
+    "message": "Confirm before closing or reloading when connected"
+  },
+  "options_trimTrailingSpaces": {
+    "message": "Trim trailing whitespace on copy"
+  },
+  "options_enableBell": {
+    "message": "Terminal bell (BEL)"
+  },
+  "options_enableVisualBell": {
+    "message": "Visual bell (screen flash)"
+  },
+  "options_lineHeight": {
+    "message": "Line spacing / Line height"
+  },
+  "options_backspaceKey": {
+    "message": "The Backspace key generates"
+  },
+  "options_deleteKey": {
+    "message": "The Delete key generates"
+  },
+  "options_keyControlH": {
+    "message": "Control-H (Will send out ^H (ASCII 8))"
+  },
+  "options_keyControlQuestion": {
+    "message": "Control-? (Will send out ^? (ASCII 127))"
+  },
+  "options_keyEscapeSequence": {
+    "message": "Standard ESC sequence (Will send out ^[[3~ (ESC [ 3 ~))"
+  },
+  "options_bellAlways": {
+    "message": "Always play sound"
+  },
+  "options_bellBackground": {
+    "message": "Only when in background"
+  },
+  "options_bellOff": {
+    "message": "Off (mute)"
+  },
+  "options_endTurnsOnLiveUpdate": {
+    "message": "Press END turns on thread live update."
+  },
+  "options_liveUpdateInterval": {
+    "message": "Update Interval"
+  },
+  "options_liveUpdateIntervalSec": {
+    "message": "sec"
+  },
+  "options_showLiveUpdateToolbar": {
+    "message": "Show floating control toolbar"
+  },
+  "options_copyOnSelect": {
+    "message": "Copy text when selected."
+  },
+  "options_antiIdleTime": {
+    "message": "Anti-idle interval (sec)"
+  },
+  "options_lineWrap": {
+    "message": "Wrap line for pasting text longer than"
+  },
+  "options_lineWrap_unit": {
+    "message": "chars"
+  },
+  "options_advanced": {
+    "message": "Advanced"
+  },
+  "options_uiLocale": {
+    "message": "UI Language"
+  },
+  "options_locale_auto": {
+    "message": "Auto (Follow system language)"
+  },
+  "options_locale_zhTW": {
+    "message": "Traditional Chinese (正體中文)"
+  },
+  "options_locale_enUS": {
+    "message": "English (US)"
+  },
+  "options_useCanvasEngine": {
+    "message": "Render by HTML5 Canvas"
+  },
+  "options_renderEngine": {
+    "message": "Render Engine"
+  },
+  "options_renderEngineCanvas": {
+    "message": "Canvas Engine (Default, high performance)"
+  },
+  "options_renderEngineDOM": {
+    "message": "DOM Engine (Compatibility mode)"
+  },
+  "options_smoothAnsiArt": {
+    "message": "Smooth ANSI Art (need Canvas mode)"
+  },
+  "options_reset": {
+    "message": "Restore defaults"
+  },
+  "options_appearance": {
+    "message": "Appearance"
+  },
+  "options_colorScheme": {
+    "message": "Color Scheme"
+  },
+  "options_colorScheme_default": {
+    "message": "Classic Default (1987 IBM VGA standard 16-color palette)"
+  },
+  "options_colorScheme_pureBw": {
+    "message": "Pure Black & White (Accessibility monochrome mode, ignores all ANSI colors and background bars)"
+  },
+  "options_colorScheme_solarizedDark": {
+    "message": "Solarized Dark (Ethan Schoonover's precision lightness-balanced palette, ideal for long reading)"
+  },
+  "options_colorScheme_nord": {
+    "message": "Nord (Arctic-inspired cool-toned pastel palette with modern minimalist aesthetics)"
+  },
+  "options_colorScheme_monokai": {
+    "message": "Monokai (Classic Sublime Text theme with warm charcoal background and vibrant contrast)"
+  },
+  "options_colorScheme_dracula": {
+    "message": "Dracula (Iconic dark purple theme with high-contrast pastel highlights)"
+  },
+  "options_colorScheme_retroAmber": {
+    "message": "Amber CRT (1970s-80s P3 amber phosphor monochrome CRT monitor, zero blue light for night reading)"
+  },
+  "options_colorScheme_retroGreen": {
+    "message": "Green CRT (Classic IBM 5151 / Apple II P1 green phosphor monochrome CRT monitor)"
+  },
+  "options_colorScheme_custom": {
+    "message": "Custom Colors (Customize default background, foreground, hyperlink, and 16-color ANSI palette)"
+  },
+  "options_colorScheme_customHint": {
+    "message": "Click swatches above to pick custom ANSI colors"
+  },
+  "options_colorScheme_resetCustom": {
+    "message": "Reset to Default"
+  },
+  "options_colorScheme_customizeThis": {
+    "message": "Customize colors based on this theme"
+  },
+  "options_colorScheme_defaultColors": {
+    "message": "Default Colors"
+  },
+  "options_colorScheme_defaultBg": {
+    "message": "Background"
+  },
+  "options_colorScheme_defaultFg": {
+    "message": "Foreground"
+  },
+  "options_colorScheme_defaultLink": {
+    "message": "Hyperlink"
+  },
+  "options_minimumContrast": {
+    "message": "Minimum Contrast"
+  },
+  "options_minimumContrast_desc": {
+    "message": "Automatically adjust foreground brightness to ensure text readability against background (iTerm2 style)"
+  },
+  "options_minimumContrast_off": {
+    "message": "Off"
+  },
+  "options_cursorStyle": {
+    "message": "Caret style"
+  },
+  "options_caretIbeam": {
+    "message": "I-beam (vertical line)"
+  },
+  "options_caretBlock": {
+    "message": "Block (solid)"
+  },
+  "options_caretHalfBlock": {
+    "message": "Half-block"
+  },
+  "options_caretUnderline": {
+    "message": "Underline"
+  },
+  "options_caretBlink": {
+    "message": "Blink Caret"
+  },
+  "options_termMargin": {
+    "message": "Margins around terminal view (px)"
+  },
+  "options_termSize": {
+    "message": "Terminal size"
+  },
+  "options_cols": {
+    "message": "Columns"
+  },
+  "options_rows": {
+    "message": "Rows"
+  },
+  "options_fontSize": {
+    "message": "Font size (px)"
+  },
+  "options_fixedTermSize": {
+    "message": "Fixed terminal size (Scale font to fit window, default 80×24)"
+  },
+  "options_fixedFontSize": {
+    "message": "Fixed font size (Adjust rows and columns by window size)"
+  },
+  "options_touchFixedFontNote": {
+    "message": "Touch interface uses fixed font size with touch panning"
+  },
+  "options_fontFitWindowWidth": {
+    "message": "Stretch font to fill the view"
+  },
+  "options_fontFace": {
+    "message": "Fonts"
+  },
+  "options_fontFaceAndPriority": {
+    "message": "Font Face and Priority"
+  },
+  "options_mouse": {
+    "message": "Mouse"
+  },
+  "options_rightClickAction": {
+    "message": "Right-click Action"
+  },
+  "options_rightClickAction_menu": {
+    "message": "Show context menu (Default)"
+  },
+  "options_rightClickAction_paste": {
+    "message": "Paste from clipboard directly (Shift + Right-click opens menu)"
+  },
+  "options_mouseWheelAction": {
+    "message": "Mouse wheel"
+  },
+  "options_mouseWheelRightAction": {
+    "message": "Right click + mouse wheel"
+  },
+  "options_mouseWheelLeftAction": {
+    "message": "Left click + mouse wheel"
+  },
+  "options_mouseWheelTrackpadMode": {
+    "message": "Detect trackpad scroll momentum"
+  },
+  "options_mouseWheelTrackpadMode_desc": {
+    "message": "Smooth out trackpad scrolling and absorb momentum to prevent over-scrolling. Leave unchecked for standard mouse wheels."
+  },
+  "options_mouseWheelChangePost": {
+    "message": "Navigate to previous/next post when scrolling past article boundaries"
+  },
+  "options_mouseWheelChangePost_desc": {
+    "message": "When reading an article (including Easy Reading mode), scrolling up at the top or down at the bottom after a brief pause navigates to the previous or next post. When disabled, scrolling stops at article boundaries."
+  },
+  "options_enableBackNavigation": {
+    "message": "Map browser Back & trackpad left swipe to Left Arrow"
+  },
+  "options_enableBackNavigation_desc": {
+    "message": "Intercept browser back navigation (trackpad two-finger left swipe, mouse back button) as Left Arrow key instead of leaving the page."
+  },
+  "options_mouseWheelAction_arrow1": {
+    "message": "Arrow Up / Down - 1 line (Simulate 1 Up / Down key press)"
+  },
+  "options_mouseWheelAction_arrow2": {
+    "message": "Arrow Up / Down - 2 lines (Simulate 2 Up / Down key presses)"
+  },
+  "options_mouseWheelAction_arrow3": {
+    "message": "Arrow Up / Down - 3 lines (Simulate 3 Up / Down key presses)"
+  },
+  "options_mouseWheelAction_arrow5": {
+    "message": "Arrow Up / Down - 5 lines (Simulate 5 Up / Down key presses)"
+  },
+  "options_mouseWheelAction_page": {
+    "message": "Page Up / Page Down (Simulate PageUp / PageDown key press)"
+  },
+  "options_mouseWheelAction_none": {
+    "message": "None (Disable mouse wheel action)"
+  },
+  "options_mouseBrowsingHighlight": {
+    "message": "Mouse browsing highlight effect"
+  },
+  "options_mouseBrowsingGuide_toggle": {
+    "message": "View Mouse Browsing Hotzone Guide"
+  },
+  "options_mouseBrowsingGuide_hide": {
+    "message": "Hide Mouse Browsing Hotzone Guide"
+  },
+  "options_mouseBrowsingGuide_tabList": {
+    "message": "Board / Article List"
+  },
+  "options_mouseBrowsingGuide_tabReading": {
+    "message": "Reading Article"
+  },
+  "options_mouseBrowsingGuide_home": {
+    "message": "Home (First Page)"
+  },
+  "options_mouseBrowsingGuide_end": {
+    "message": "End (Last Page)"
+  },
+  "options_mouseBrowsingGuide_pageUp": {
+    "message": "Page Up (Previous Page)"
+  },
+  "options_mouseBrowsingGuide_pageDown": {
+    "message": "Page Down (Next Page)"
+  },
+  "options_mouseBrowsingGuide_back": {
+    "message": "Arrow Left (Back)"
+  },
+  "options_mouseBrowsingGuide_enter": {
+    "message": "Enter (Open Board / Article)"
+  },
+  "options_mouseBrowsingGuide_firstThread": {
+    "message": "= (First Post in Thread)"
+  },
+  "options_mouseBrowsingGuide_prevThread": {
+    "message": "[ (Previous Post in Thread)"
+  },
+  "options_mouseBrowsingGuide_nextThread": {
+    "message": "] (Next Post in Thread)"
+  },
+  "options_mouseBrowsingGuide_lastThread": {
+    "message": "Last Post in Thread"
+  },
+  "options_mouseBrowsingGuide_refresh": {
+    "message": "Refresh Pushed Texts"
+  },
+  "options_supportMouseReporting": {
+    "message": "Native Mouse & Touch Support"
+  },
+  "options_supportMouseReporting_desc": {
+    "message": "Report native mouse and touch pointer/scroll events to the server (Mouse & Touch Reporting). Requires server-side support (e.g., the MOUSE preference option)."
+  },
+  "options_highlightColor": {
+    "message": "Color"
+  },
+  "options_mouseLeftFunction": {
+    "message": "Mouse left button"
+  },
+  "options_mouseMiddleFunction": {
+    "message": "Mouse middle button"
+  },
+  "options_none": {
+    "message": "No action"
+  },
+  "options_doPaste": {
+    "message": "Paste from clipboard directly"
+  },
+  "options_leftKey": {
+    "message": "Sends LEFT key"
+  },
+  "options_rightKey": {
+    "message": "Sends RIGHT key"
+  },
+  "options_enterKey": {
+    "message": "Sends ENTER key"
+  },
+  "options_upKey": {
+    "message": "Sends UP key"
+  },
+  "options_downKey": {
+    "message": "Sends DOWN key"
+  },
+  "options_pageUpKey": {
+    "message": "Sends PageUp key"
+  },
+  "options_pageDownKey": {
+    "message": "Sends PageDown key"
+  },
+  "options_escKey": {
+    "message": "Sends ESC key"
+  },
+  "options_upDown": {
+    "message": "Controls up / down"
+  },
+  "options_pageUpDown": {
+    "message": "Controls pageup / pagedown"
+  },
+  "options_threadLastNext": {
+    "message": "Controls thread previous / next"
+  },
+  "about_appName_subtitle": {
+    "message": "WebSocket ANSI Terminal"
+  },
+  "about_description": {
+    "message": "Derived from PttChrome, originally by #link_github_iamchucky#. Ported to HTML5 WebSocket by #link_github_robertabcd#. Dual color rendering, dynamic title, version info and CI deployment by #link_github_iid#. Modernization, Canvas rendering and touch interface by #link_github_hungte#. Latest official repository is #link_official_PttTerm# under #link_github_ptt# organization."
+  },
+  "about_version_title": {
+    "message": "Version & Source Code"
+  },
+  "about_version_content": {
+    "message": [
+      "Current repository: #link_current_repo#",
+      "Previous fork: #link_robertabcd_PttChrome#",
+      "Original repository: #link_iamchucky_PttChrome# (webapp12 2015/06)"
+    ]
+  },
+  "about_version_upstream": {
+    "message": "Forked from: #link_official_PttTerm#"
+  },
+  "about_license_title": {
+    "message": "License"
+  },
+  "about_license_content": {
+    "message": "#link_GPL20#"
+  },
+  "about_bug_report": {
+    "message": "Bug Report"
+  },
+  "about_new_title": {
+    "message": "What's new"
+  },
+  "about_new_content": {
+    "message": [
+      "Dual Rendering Engines (Canvas / DOM)",
+      "Mobile Virtual Keyboard & Gestures",
+      "Login Assist"
+    ]
+  },
+  "alert_developerModeHeader": {
+    "message": "Developer Mode"
+  },
+  "alert_developerModeText": {
+    "message": "You are using developer mode. Things may break. Use this at your own risk."
+  },
+  "alert_developerModeDismiss": {
+    "message": "Yes, I understand."
+  },
+  "alert_connectionHeader": {
+    "message": "You are disconnected!"
+  },
+  "alert_connectionText": {
+    "message": "Would you like to reconnect to the site?"
+  },
+  "alert_connectionReconnect": {
+    "message": "Reconnect (ENTER)"
+  },
+  "alert_pasteShortcutHeader": {
+    "message": "Paste"
+  },
+  "alert_pasteShortcutText": {
+    "message": "Please use Shift+Insert to paste"
+  },
+  "alert_pasteShortcutClose": {
+    "message": "OK"
+  },
+  "inputHelperTitle": {
+    "message": "Input helper"
+  },
+  "colorTitle": {
+    "message": "Color"
+  },
+  "colorHelperSend": {
+    "message": "Send ANSI color code"
+  },
+  "colorHelperSendMenuFore": {
+    "message": "Send foreground only"
+  },
+  "colorHelperSendMenuBack": {
+    "message": "Send background only"
+  },
+  "colorHelperSendMenuReset": {
+    "message": "Send reset code"
+  },
+  "colorHelperBlink": {
+    "message": "Blink"
+  },
+  "colorHelperPreview": {
+    "message": "▅ PREVIEW ▅"
+  },
+  "colorHelperTooltip1": {
+    "message": "Left click: foreground color"
+  },
+  "colorHelperTooltip2": {
+    "message": "Right click: background color, upper row only"
+  },
+  "symTitle": {
+    "message": "Symbols"
+  },
+  "symTitle_general": {
+    "message": "General"
+  },
+  "symTitle_lineBorders": {
+    "message": "Line borders"
+  },
+  "symTitle_blocks": {
+    "message": "Blocks"
+  },
+  "symTitle_lines": {
+    "message": "Lines"
+  },
+  "symTitle_special": {
+    "message": "Special"
+  },
+  "symTitle_brackets": {
+    "message": "Brackets"
+  },
+  "symTitle_greek": {
+    "message": "Greek"
+  },
+  "symTitle_phonetic": {
+    "message": "Phonetic"
+  },
+  "symTitle_math": {
+    "message": "Math"
+  },
+  "symTitle_hiragana": {
+    "message": "Hiragana"
+  },
+  "symTitle_katakana": {
+    "message": "Katakana"
+  },
+  "emoTitle": {
+    "message": "Emoticons"
+  },
+  "emoTitle_angry": {
+    "message": "Angry"
+  },
+  "emoTitle_meh": {
+    "message": "Meh"
+  },
+  "emoTitle_sweat": {
+    "message": "Sweat & awkward"
+  },
+  "emoTitle_happy": {
+    "message": "Happy"
+  },
+  "emoTitle_other": {
+    "message": "Others"
+  },
+  "liveHelperEnable": {
+    "message": "Enable"
+  },
+  "liveHelperStateEnabled": {
+    "message": "Enabled"
+  },
+  "liveHelperSpan": {
+    "message": "thread refreshes every"
+  },
+  "liveHelperSpanSec": {
+    "message": "sec"
+  },
+  "options_fontList_title": {
+    "message": "Applied from top to bottom, drag or use arrows to reorder"
+  },
+  "options_fontList_queryDevice": {
+    "message": "Query Device Fonts"
+  },
+  "options_fontList_querying": {
+    "message": "Querying device fonts..."
+  },
+  "options_fontList_queried": {
+    "message": "Loaded device fonts"
+  },
+  "options_fontList_restoreDefault": {
+    "message": "Restore Defaults"
+  },
+  "options_fontList_selectThenAdd": {
+    "message": "Select a font then add"
+  },
+  "options_fontList_customOption": {
+    "message": "Enter custom font name..."
+  },
+  "options_fontList_customPlaceholder": {
+    "message": "Enter font name (e.g. Cubic 11)"
+  },
+  "options_fontList_backToSelect": {
+    "message": "Back to list"
+  },
+  "options_fontList_notFound": {
+    "message": "Font not found: $1"
+  },
+  "options_fontList_presetGroup": {
+    "message": "Recommended Fonts"
+  },
+  "options_fontList_deviceGroup": {
+    "message": "Installed Device Fonts"
+  },
+  "options_fontList_add": {
+    "message": "+ Add"
+  },
+  "options_fontList_preview": {
+    "message": "等寬排版預覽 1234567890\nThe quick brown fox jumps over the lazy dog"
+  },
+  "options_fontList_moveUp": {
+    "message": "Move Up"
+  },
+  "options_fontList_moveDown": {
+    "message": "Move Down"
+  },
+  "options_fontList_remove": {
+    "message": "Delete"
+  },
+  "options_fontList_empty": {
+    "message": "No fonts configured. Monospace fallback will be used."
+  },
+  "touch_input_sheet_title": {
+    "message": "Input Message"
+  },
+  "touch_input_sheet_placeholder": {
+    "message": "Type message, post content..."
+  },
+  "touch_input_sheet_send": {
+    "message": "Send"
+  },
+  "touch_input_sheet_send_enter": {
+    "message": "Send + Enter (↵)"
+  },
+  "touch_input_sheet_auto_wrap": {
+    "message": "Auto Wrap"
+  },
+  "touch_input_sheet_direct_mode": {
+    "message": "Switch to direct terminal input"
+  },
+  "touch_input_sheet_line_over_limit": {
+    "message": "Exceeds recommended line length of 78 characters (auto-wrap on send)"
+  },
+  "touch_input_sheet_line_limit": {
+    "message": "Recommended line length (78 characters)"
+  },
+  "touch_input_sheet_multi_lines": {
+    "message": "$1 lines · Max $2 / 78 B"
+  },
+  "touch_input_sheet_close": {
+    "message": "Close"
+  },
+  "touch_input_sheet_clear": {
+    "message": "Clear"
+  },
+  "touch_input_sheet_auto_wrap_compact": {
+    "message": "Wrap"
+  },
+  "plugin_pwa_prompt_title": {
+    "message": "PWA Install Guide"
+  },
+  "plugin_pwa_prompt_desc": {
+    "message": "Guides users to install as a PWA app (iOS / Android / Desktop)"
+  },
+  "plugin_virtual_keyboard_title": {
+    "message": "Virtual Keyboard"
+  },
+  "plugin_virtual_keyboard_desc": {
+    "message": "Provide on-screen keypad toolbar, arrow keys, and mobile input sheet on touch devices"
+  },
+  "cmenu_pwa_install_mobile": {
+    "message": "📱 Add to Home Screen (PWA)"
+  },
+  "cmenu_pwa_install_desktop": {
+    "message": "💻 Install Desktop App (PWA)"
+  },
+  "pwa_prompt_title_ios": {
+    "message": "Add to Home Screen"
+  },
+  "pwa_prompt_title_android": {
+    "message": "Install App"
+  },
+  "pwa_prompt_title_desktop": {
+    "message": "Install Desktop App"
+  },
+  "pwa_prompt_native_desc": {
+    "message": "Install as a PWA app to enjoy fullscreen browsing, dedicated window, and seamless connection."
+  },
+  "pwa_prompt_ios_desc": {
+    "message": "Add to Home Screen for an immersive fullscreen terminal, black status bar, and complete touch experience:"
+  },
+  "pwa_prompt_android_desc": {
+    "message": "Add to Home Screen for a fullscreen standalone app experience:"
+  },
+  "pwa_prompt_desktop_desc": {
+    "message": "Install as a desktop app to enjoy a standalone window and shortcut:"
+  },
+  "pwa_prompt_btn_install": {
+    "message": "Install"
+  },
+  "pwa_prompt_btn_got_it": {
+    "message": "Got It"
+  },
+  "pwa_prompt_btn_later": {
+    "message": "Later"
+  },
+  "pwa_prompt_btn_remind_later": {
+    "message": "Remind Me Later"
+  },
+  "pwa_prompt_btn_not_needed": {
+    "message": "No Thanks"
+  }
+}

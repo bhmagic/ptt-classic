@@ -1,12 +1,10 @@
 import cx from "classnames";
-import React from "react";
-import { compose, lifecycle, withHandlers } from "recompose";
-import { MenuItem } from "react-bootstrap";
-import { i18n } from "../../js/i18n";
+import React, { useRef, useLayoutEffect } from "react";
+import { _ } from "../../js/i18n";
 import "./DropdownMenu.css";
 
 const top = (mouseHeight, menuHeight) => {
-  const pageHeight = window.innerHeight;
+  const pageHeight = typeof window !== "undefined" ? window.innerHeight : 600;
 
   // opening menu would pass the bottom of the page
   if (mouseHeight + menuHeight > pageHeight && menuHeight < mouseHeight) {
@@ -15,180 +13,231 @@ const top = (mouseHeight, menuHeight) => {
   return mouseHeight;
 };
 
+const getSafeAreaLeft = () => {
+  if (typeof document !== "undefined") {
+    const termWin = document.getElementById("TermWindow");
+    if (termWin && typeof termWin.getBoundingClientRect === "function") {
+      return termWin.getBoundingClientRect().left || 0;
+    }
+  }
+  return 0;
+};
+
 const left = (mouseWidth, menuWidth) => {
-  const pageWidth = window.innerWidth;
+  const pageWidth = typeof window !== "undefined" ? window.innerWidth : 800;
+  const minLeft = getSafeAreaLeft();
 
   // opening menu would pass the side of the page
   if (mouseWidth + menuWidth > pageWidth && menuWidth < mouseWidth) {
-    return mouseWidth - menuWidth;
+    return Math.max(minLeft, mouseWidth - menuWidth);
   }
-  return mouseWidth;
+  return Math.max(minLeft, mouseWidth);
 };
 
-const normalizeSelectedText = selectedText => {
+const normalizeSelectedText = (selectedText) => {
   if (selectedText.length > 15) {
-    return `${selectedText.substr(0, 15)} …`;
+    return `${selectedText.slice(0, 15)} …`;
   }
   return selectedText;
 };
 
-const QUICK_SEARCH = {
-  providers: [
-    {
-      name: "goo.gl",
-      url: "https://goo.gl/%s"
-    }
-  ]
-};
-
-const enhance = compose(
-  withHandlers(() => {
-    const refs = {};
-
-    return {
-      onDropdownMenuMount: () => ref => {
-        refs.dropdownMenu = ref;
-      },
-      onMousePositionChange: ({ pageX, pageY }) => () => {
-        refs.dropdownMenu.style.cssText += `
-          top:${top(pageY, refs.dropdownMenu.clientHeight)}px;
-          left:${left(pageX, refs.dropdownMenu.clientWidth)}px;
-        `;
-      },
-      onContextMenu: () => event => {
-        event.stopPropagation();
-        event.preventDefault();
-      }
-    };
-  }),
-  lifecycle({
-    componentDidMount() {
-      this.props.onMousePositionChange();
-    },
-    componentDidUpdate(prevProps) {
-      if (
-        this.props.pageX !== prevProps.pageX ||
-        this.props.pageY !== prevProps.pageY
-      ) {
-        this.props.onMousePositionChange();
-      }
-    }
-  })
+const isMac = typeof navigator !== "undefined" && (
+  /Mac|iPod|iPhone|iPad/i.test(navigator.platform || "") ||
+  /Macintosh|Mac OS X/i.test(navigator.userAgent || "")
 );
 
+const MenuItem = ({
+  eventKey,
+  onSelect,
+  onClick,
+  divider,
+  disabled,
+  className,
+  children,
+  openedAtRef,
+}) => {
+  if (divider) {
+    return <li role="separator" className="divider" />;
+  }
+  const handleClick = (e) => {
+    e.preventDefault();
+    if (disabled) {
+      e.stopPropagation();
+      return;
+    }
+    if (openedAtRef && Date.now() < openedAtRef.current + 350) {
+      return;
+    }
+    if (onSelect) onSelect(eventKey);
+    if (onClick) onClick(e);
+  };
+  return (
+    <li role="presentation" className={cx(className, { disabled })}>
+      <a
+        role="menuitem"
+        aria-disabled={disabled || undefined}
+        tabIndex="-1"
+        href="#"
+        onClick={handleClick}
+      >
+        {children}
+      </a>
+    </li>
+  );
+};
+
 export const DropdownMenu = ({
+  open,
   pageX,
   pageY,
+  anchorRect,
   urlEnabled,
   normalEnabled,
   selEnabled,
-  mouseBrowsingEnabled,
   selectedText,
   onMenuSelect,
-  onInputHelperClick,
-  onLiveArticleHelperClick,
   onSettingsClick,
-  onQuickSearchSelect,
-  //
-  onDropdownMenuMount,
-  onContextMenu
-}) => (
-  <ul
-    className="dropdown-menu DropdownMenu--reset"
-    ref={onDropdownMenuMount}
-    onContextMenu={onContextMenu}
-  >
-    {selEnabled && (
-      <React.Fragment>
-        <MenuItem eventKey="copy" onSelect={onMenuSelect}>
-          {i18n("cmenu_copy")}
-          <span className="DropdownMenu__Item__HotKey">Ctrl+C</span>
+  pluginItems = [],
+}) => {
+  const menuRef = useRef(null);
+  const openedAtRef = useRef(0);
+
+  useLayoutEffect(() => {
+    const el = menuRef.current;
+    if (!el) return;
+
+    if (!open) {
+      el.style.visibility = "hidden";
+      return;
+    }
+
+    openedAtRef.current = Date.now();
+
+    const updatePosition = () => {
+      el.style.visibility = "hidden";
+      const pageHeight =
+        typeof window !== "undefined" ? window.innerHeight : 600;
+      const pageWidth =
+        typeof window !== "undefined" ? window.innerWidth : 800;
+
+      if (anchorRect) {
+        const isBottomHalf = anchorRect.top > pageHeight / 2;
+        if (isBottomHalf) {
+          const menuTop = Math.max(8, anchorRect.top - el.clientHeight - 6);
+          el.style.top = `${menuTop}px`;
+        } else {
+          const menuTop = Math.min(
+            pageHeight - el.clientHeight - 8,
+            anchorRect.bottom + 6
+          );
+          el.style.top = `${menuTop}px`;
+        }
+        const minLeft = Math.max(8, getSafeAreaLeft() + 8);
+        const menuLeft = Math.max(
+          minLeft,
+          Math.min(
+            pageWidth - el.clientWidth - 8,
+            anchorRect.right - el.clientWidth
+          )
+        );
+        el.style.left = `${menuLeft}px`;
+      } else {
+        el.style.top = `${top(pageY, el.clientHeight)}px`;
+        el.style.left = `${left(pageX, el.clientWidth)}px`;
+      }
+      el.style.visibility = "visible";
+    };
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+    };
+  }, [open, pageX, pageY, anchorRect]);
+
+  const handleContextMenu = (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+  };
+
+  return (
+    <ul
+      className="dropdown-menu DropdownMenu--reset"
+      ref={menuRef}
+      onContextMenu={handleContextMenu}
+      onClickCapture={(e) => {
+        if (Date.now() < openedAtRef.current + 350) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }}
+    >
+      {selEnabled && (
+        <React.Fragment>
+          <MenuItem eventKey="copy" onSelect={onMenuSelect}>
+            {_("cmenu_copy")}
+            <span className="DropdownMenu__Item__HotKey">
+              {isMac ? "⌘C" : "Ctrl+C"}
+            </span>
+          </MenuItem>
+          <MenuItem eventKey="copyAnsi" onSelect={onMenuSelect}>
+            {_("cmenu_copyAnsi")}
+          </MenuItem>
+        </React.Fragment>
+      )}
+      {(normalEnabled || selEnabled) && (
+        <MenuItem eventKey="paste" onSelect={onMenuSelect}>
+          {_("cmenu_paste")}
+          <span className="DropdownMenu__Item__HotKey">
+            {isMac ? "⌘V" : "Shift+Insert"}
+          </span>
         </MenuItem>
-        <MenuItem eventKey="copyAnsi" onSelect={onMenuSelect}>
-          {i18n("cmenu_copyAnsi")}
+      )}
+      {selEnabled && (
+        <MenuItem eventKey="searchGoogle" onSelect={onMenuSelect}>
+          {_("cmenu_searchGoogle")}{" "}
+          <span>'{normalizeSelectedText(selectedText)}'</span>
         </MenuItem>
-      </React.Fragment>
-    )}
-    {normalEnabled && (
-      <MenuItem eventKey="paste" onSelect={onMenuSelect}>
-        {i18n("cmenu_paste")}
-        <span className="DropdownMenu__Item__HotKey">Shift+Insert</span>
-      </MenuItem>
-    )}
-    {selEnabled && (
-      <MenuItem eventKey="searchGoogle" onSelect={onMenuSelect}>
-        {i18n("cmenu_searchGoogle")}{" "}
-        <span>'{normalizeSelectedText(selectedText)}'</span>
-      </MenuItem>
-    )}
-    {urlEnabled && (
-      <React.Fragment>
-        <MenuItem eventKey="openUrlNewTab" onSelect={onMenuSelect}>
-          {i18n("cmenu_openUrlNewTab")}
-        </MenuItem>
-        <MenuItem eventKey="copyLinkUrl" onSelect={onMenuSelect}>
-          {i18n("cmenu_copyLinkUrl")}
-        </MenuItem>
-      </React.Fragment>
-    )}
-    <MenuItem divider />
-    {selEnabled && (
-      <React.Fragment>
-        <MenuItem className="DropdownMenu__Item--quickSearch">
-          {i18n("cmenu_quickSearch")}{" "}
-          <span style={{ float: "right" }}>&#9658;</span>
-          <ul
-            className={cx(
-              "dropdown-menu",
-              "DropdownMenu--reset",
-              "QuickSearchMenu",
-              {
-                "QuickSearchMenu--up": pageY > window.innerHeight / 2,
-                "QuickSearchMenu--left": pageX > window.innerWidth * 0.7
-              }
-            )}
-            role="menu"
-          >
-            {QUICK_SEARCH.providers.map(p => (
+      )}
+      {urlEnabled && (
+        <React.Fragment>
+          <MenuItem eventKey="openUrlNewTab" onSelect={onMenuSelect}>
+            {_("cmenu_openUrlNewTab")}
+          </MenuItem>
+          <MenuItem eventKey="copyLinkUrl" onSelect={onMenuSelect}>
+            {_("cmenu_copyLinkUrl")}
+          </MenuItem>
+        </React.Fragment>
+      )}
+      <MenuItem divider />
+      {normalEnabled && (
+        <React.Fragment>
+          <MenuItem eventKey="selectAll" onSelect={onMenuSelect}>
+            {_("cmenu_selectAll")}
+            <span className="DropdownMenu__Item__HotKey">
+              {isMac ? "⌘A" : "Ctrl+A"}
+            </span>
+          </MenuItem>
+          {pluginItems &&
+            pluginItems.map((item) => (
               <MenuItem
-                key={p.url}
-                eventKey={p.url}
-                onSelect={onQuickSearchSelect}
+                key={item.id}
+                disabled={item.enabled === false}
+                onClick={item.onClick}
+                className={cx({
+                  "DropdownMenu__Item--checked": item.checked,
+                  "DropdownMenu__Item--disabled": item.enabled === false,
+                })}
               >
-                {p.name}
+                {typeof item.label === "function" ? item.label() : item.label}
               </MenuItem>
             ))}
-          </ul>
-        </MenuItem>
-        <MenuItem divider />
-      </React.Fragment>
-    )}
-    {normalEnabled && (
-      <React.Fragment>
-        <MenuItem eventKey="selectAll" onSelect={onMenuSelect}>
-          {i18n("cmenu_selectAll")}
-          <span className="DropdownMenu__Item__HotKey">Ctrl+A</span>
-        </MenuItem>
-        <MenuItem
-          eventKey="mouseBrowsing"
-          onSelect={onMenuSelect}
-          className={cx({
-            "DropdownMenu__Item--checked": mouseBrowsingEnabled
-          })}
-        >
-          {i18n("cmenu_mouseBrowsing")}
-        </MenuItem>
-        <MenuItem onClick={onInputHelperClick}>
-          {i18n("cmenu_showInputHelper")}
-        </MenuItem>
-        <MenuItem onClick={onLiveArticleHelperClick}>
-          {i18n("cmenu_showLiveArticleHelper")}
-        </MenuItem>
-        <MenuItem divider />
-      </React.Fragment>
-    )}
-    <MenuItem onClick={onSettingsClick}>{i18n("cmenu_settings")}</MenuItem>
-  </ul>
-);
+          <MenuItem divider />
+        </React.Fragment>
+      )}
+      <MenuItem onClick={onSettingsClick}>{_("cmenu_settings")}</MenuItem>
+    </ul>
+  );
+};
 
-export default enhance(DropdownMenu);
+export default DropdownMenu;

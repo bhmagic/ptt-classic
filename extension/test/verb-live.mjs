@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { articleFrame } from './media.mjs';
 
 const imageUrl = new URL(process.argv.slice(2).find(arg => arg !== '--') || '');
 if (imageUrl.origin !== 'https://i.verb.tw' || imageUrl.username || imageUrl.password) {
@@ -43,15 +44,17 @@ try {
   });
 
   // PTT is simulated; the image uses the packaged extension rules without test header overrides.
-  await page.routeWebSocket('wss://ws.ptt.cc/bbs', socket =>
-    socket.send(Buffer.from(`\x1b[2J\x1b[H${imageUrl.href}\r\n`)));
+  let terminalSocket;
+  await page.routeWebSocket('wss://ws.ptt.cc/bbs', socket => {
+    terminalSocket = socket;
+    socket.send(Buffer.from(`\x1b[2J\x1b[H${imageUrl.href}\r\n`));
+  });
   await page.goto(info.bookmark);
   const main = page.locator('#mainContainer');
-  await page.locator('[data-ptt-media-preview-container]').waitFor();
   await main.locator('a').hover();
-  const hover = page.locator('img[data-ptt-media-preview-fallback]');
+  const hover = page.locator('.image-preview-loaded img');
   await page.waitForFunction(() => {
-    const image = document.querySelector('img[data-ptt-media-preview-fallback]');
+    const image = document.querySelector('.image-preview-loaded img');
     return image?.complete && image.naturalWidth > 0;
   }).catch(async error => {
     console.error(JSON.stringify({
@@ -65,33 +68,17 @@ try {
   const hoverSize = await hover.evaluate(image => ({ width: image.naturalWidth, height: image.naturalHeight }));
   await page.screenshot({ path: path.join(results, 'verb-live-hover.png') });
 
-  // Enable inline previews only in this temporary profile; preference UI is covered offline.
+  // Enable Easy Reading in this temporary profile, then receive a real article.
   await page.evaluate(() => {
-    const prefs = JSON.parse(localStorage.getItem('pttchrome.pref.v1')) || { values: {} };
-    prefs.values.enableEasyReading = true;
-    localStorage.setItem('pttchrome.pref.v1', JSON.stringify(prefs));
+    window.app.onValuesPrefChange({ ...window.app.prefValues, enableEasyReading: true });
   });
-  await page.reload();
-  await main.locator('a').waitFor({ state: 'attached' });
-  await main.evaluate((container, src) => {
-    container.replaceChildren();
-    const marker = document.createElement('span');
-    marker.className = 'q4 b7';
-    marker.textContent = 'Image preview test';
-    const wrapper = document.createElement('span');
-    const link = document.createElement('a');
-    link.href = src;
-    link.textContent = src;
-    wrapper.append(link);
-    const target = document.createElement('div');
-    target.dataset.testPreview = 'verb-live';
-    container.append(marker, wrapper, target);
-  }, imageUrl.href);
+  terminalSocket.send(Buffer.from(articleFrame([imageUrl.href], 'Live image test'), 'latin1'));
+  await page.locator('#easyReadingOverlay').waitFor({ state: 'visible' });
   await page.waitForFunction(() => {
-    const image = document.querySelector('[data-test-preview="verb-live"] img');
+    const image = document.querySelector('.ptt-inline-media img');
     return image?.complete && image.naturalWidth > 0;
   });
-  const inlineSize = await page.locator('[data-test-preview="verb-live"] img').evaluate(image => ({ width: image.naturalWidth, height: image.naturalHeight }));
+  const inlineSize = await page.locator('.ptt-inline-media img').evaluate(image => ({ width: image.naturalWidth, height: image.naturalHeight }));
   await page.screenshot({ path: path.join(results, 'verb-live-inline.png') });
 
   const network = [...requests].map(([id, url]) => {

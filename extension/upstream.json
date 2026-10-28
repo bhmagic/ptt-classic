@@ -1,0 +1,7 @@
+{
+  "repository": "https://github.com/ptt/ptt-term",
+  "branch": "prod",
+  "commit": "ba7c00d5edff1654bf3cc89994b9dd2d23a072fe",
+  "version": "3.0.3",
+  "classicArchive": "https://github.com/bhmagic/ptt-classic/releases/tag/v0.1.1"
+}

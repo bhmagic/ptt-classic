@@ -1,0 +1,234 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { execFileSync } from 'node:child_process';
+import yaml from 'yaml';
+
+const PROJECT_ROOT = path.resolve(import.meta.dirname, '..');
+const SITES_DIR = path.join(PROJECT_ROOT, '.github/workflows/sites');
+const LOAD_SITES_SCRIPT = path.join(PROJECT_ROOT, '.github/workflows/load_sites.py');
+
+const REQUIRED_FIELDS = [
+  'CNAME',
+  'TARGET_REPO',
+  'SITE_URL',
+  'DEV_PROXY_TARGET',
+  'DEV_PROXY_HEADER',
+];
+
+test('sites directory contains valid site configurations', () => {
+  assert.ok(fs.existsSync(SITES_DIR), 'sites directory must exist');
+
+  const files = fs.readdirSync(SITES_DIR).filter((f) => f.endsWith('.yml') || f.endsWith('.yaml'));
+  assert.ok(files.length >= 2, 'should have at least ptt.yml and ptt2.yml');
+  assert.ok(files.includes('ptt.yml'), 'ptt.yml must exist');
+  assert.ok(files.includes('ptt2.yml'), 'ptt2.yml must exist');
+
+  for (const file of files) {
+    if (file.startsWith('_') || file.startsWith('.')) continue;
+    const content = fs.readFileSync(path.join(SITES_DIR, file), 'utf-8');
+    const doc = yaml.parse(content);
+    assert.ok(typeof doc === 'object' && doc !== null, `${file} should be a valid YAML map`);
+
+    for (const field of REQUIRED_FIELDS) {
+      assert.ok(doc[field], `${file} must contain required field "${field}"`);
+      assert.equal(typeof doc[field], 'string', `${file} field "${field}" must be a string`);
+    }
+  }
+});
+
+test('ptt.yml and ptt2.yml have correct values', () => {
+  const ptt = yaml.parse(fs.readFileSync(path.join(SITES_DIR, 'ptt.yml'), 'utf-8'));
+  assert.equal(ptt.CNAME, 'term.ptt.cc');
+  assert.equal(ptt.TARGET_REPO, 'ptt/term.ptt.cc');
+  assert.equal(ptt.THEME, 'ptt.cc');
+  assert.equal(ptt.SITE_TYPE, 'ptt');
+  assert.equal(ptt.DEPLOY_BRANCH, 'prod');
+
+  const ptt2 = yaml.parse(fs.readFileSync(path.join(SITES_DIR, 'ptt2.yml'), 'utf-8'));
+  assert.equal(ptt2.CNAME, 'term.ptt2.cc');
+  assert.equal(ptt2.TARGET_REPO, 'ptt/term.ptt2.cc');
+  assert.equal(ptt2.THEME, 'ptt2.cc');
+  assert.equal(ptt2.SITE_TYPE, 'ptt2');
+  assert.equal(ptt2.DEPLOY_BRANCH, 'beta');
+});
+
+test('load_sites.py outputs valid GitHub Actions matrix JSON', () => {
+  const output = execFileSync('python3', [LOAD_SITES_SCRIPT], {
+    encoding: 'utf-8',
+    cwd: PROJECT_ROOT,
+    env: {
+      ...process.env,
+      PYTHONIOENCODING: 'utf-8',
+    },
+  });
+
+  const hasSitesMatch = output.match(/^has_sites=(.+)$/m);
+  assert.ok(hasSitesMatch, 'output must contain has_sites=<bool>');
+  assert.equal(hasSitesMatch[1], 'true');
+
+  const match = output.match(/^matrix=(.+)$/m);
+  assert.ok(match, 'output must contain matrix=<json>');
+
+  const parsed = JSON.parse(match[1]);
+  assert.ok(Array.isArray(parsed.site), 'matrix must have "site" array');
+  assert.ok(parsed.site.length >= 2, 'matrix must contain at least 2 sites');
+
+  const pttEntry = parsed.site.find((s) => s.SITE_ID === 'ptt');
+  assert.ok(pttEntry, 'ptt entry must exist in matrix');
+  assert.equal(pttEntry.CNAME, 'term.ptt.cc');
+  assert.equal(pttEntry.BRANCH, 'gh-pages');
+  assert.equal(pttEntry.DYNAMIC_TITLE, 'false');
+  assert.equal(pttEntry.DEPLOY_BRANCH, 'prod');
+
+  const ptt2Entry = parsed.site.find((s) => s.SITE_ID === 'ptt2');
+  assert.ok(ptt2Entry, 'ptt2 entry must exist in matrix');
+  assert.equal(ptt2Entry.CNAME, 'term.ptt2.cc');
+  assert.equal(ptt2Entry.BRANCH, 'gh-pages');
+  assert.equal(ptt2Entry.DYNAMIC_TITLE, 'false');
+  assert.equal(ptt2Entry.DEPLOY_BRANCH, 'beta');
+});
+
+test('load_sites.py filters sites by --branch prod/beta and supports --site override', () => {
+  const runLoadSites = (args) => {
+    return execFileSync('python3', [LOAD_SITES_SCRIPT, ...args], {
+      encoding: 'utf-8',
+      cwd: PROJECT_ROOT,
+      env: {
+        ...process.env,
+        PYTHONIOENCODING: 'utf-8',
+      },
+    });
+  };
+
+  // 1. --branch prod should deploy only ptt
+  {
+    const out = runLoadSites(['--branch', 'prod']);
+    assert.match(out, /^has_sites=true$/m);
+    const matrix = JSON.parse(out.match(/^matrix=(.+)$/m)[1]);
+    assert.equal(matrix.site.length, 1);
+    assert.equal(matrix.site[0].SITE_ID, 'ptt');
+    assert.equal(matrix.site[0].CNAME, 'term.ptt.cc');
+  }
+
+  // 2. --branch beta should deploy only ptt2
+  {
+    const out = runLoadSites(['--branch', 'beta']);
+    assert.match(out, /^has_sites=true$/m);
+    const matrix = JSON.parse(out.match(/^matrix=(.+)$/m)[1]);
+    assert.equal(matrix.site.length, 1);
+    assert.equal(matrix.site[0].SITE_ID, 'ptt2');
+    assert.equal(matrix.site[0].CNAME, 'term.ptt2.cc');
+  }
+
+  // 3. --branch dev has no matching sites, returns empty matrix and has_sites=false
+  {
+    const out = runLoadSites(['--branch', 'dev']);
+    assert.match(out, /^has_sites=false$/m);
+    const matrix = JSON.parse(out.match(/^matrix=(.+)$/m)[1]);
+    assert.equal(matrix.site.length, 0);
+  }
+
+  // 4. --site all overrides branch filter and deploys all sites
+  {
+    const out = runLoadSites(['--branch', 'prod', '--site', 'all']);
+    assert.match(out, /^has_sites=true$/m);
+    const matrix = JSON.parse(out.match(/^matrix=(.+)$/m)[1]);
+    assert.equal(matrix.site.length, 2);
+  }
+
+  // 5. --site ptt2 overrides branch=prod
+  {
+    const out = runLoadSites(['--branch', 'prod', '--site', 'ptt2']);
+    assert.match(out, /^has_sites=true$/m);
+    const matrix = JSON.parse(out.match(/^matrix=(.+)$/m)[1]);
+    assert.equal(matrix.site.length, 1);
+    assert.equal(matrix.site[0].SITE_ID, 'ptt2');
+  }
+
+  // 6. Unknown site exits with error
+  assert.throws(() => {
+    runLoadSites(['--site', 'unknown_site']);
+  });
+});
+
+test('load_sites.py normalizes and validates DEFAULT_PLUGINS', () => {
+  const os = fs.mkdtempSync(path.join(PROJECT_ROOT, 'test', '.tmp-sites-'));
+  try {
+    // Valid dict format + valid string format
+    fs.writeFileSync(
+      path.join(os, 'site_dict.yml'),
+      yaml.stringify({
+        CNAME: 'dict.example.com',
+        TARGET_REPO: 'example/dict',
+        SITE_URL: 'wss://dict.example.com/bbs',
+        DEV_PROXY_TARGET: 'https://dict.example.com',
+        DEV_PROXY_HEADER: 'https://dict.example.com',
+        DEFAULT_PLUGINS: {
+          easy_reading: true,
+          mouse_browsing: false,
+          enableTouchDebugHUD: true,
+        },
+      })
+    );
+
+    fs.writeFileSync(
+      path.join(os, 'site_str.yml'),
+      yaml.stringify({
+        CNAME: 'str.example.com',
+        TARGET_REPO: 'example/str',
+        SITE_URL: 'wss://str.example.com/bbs',
+        DEV_PROXY_TARGET: 'https://str.example.com',
+        DEV_PROXY_HEADER: 'https://str.example.com',
+        DEFAULT_PLUGINS: '+fps_meter, -media_previewer, !auto_wrap',
+      })
+    );
+
+    const out = execFileSync('python3', [LOAD_SITES_SCRIPT, '--sites-dir', os], {
+      encoding: 'utf-8',
+      cwd: PROJECT_ROOT,
+    });
+    const matrix = JSON.parse(out.match(/^matrix=(.+)$/m)[1]);
+    const siteDict = matrix.site.find((s) => s.SITE_ID === 'site_dict');
+    const siteStr = matrix.site.find((s) => s.SITE_ID === 'site_str');
+
+    assert.deepEqual(JSON.parse(siteDict.DEFAULT_PLUGINS), {
+      easy_reading: true,
+      mouse_browsing: false,
+      touch_debug_hud: true,
+    });
+    assert.deepEqual(JSON.parse(siteStr.DEFAULT_PLUGINS), {
+      fps_meter: true,
+      media_previewer: false,
+      auto_wrap: false,
+    });
+
+    // Invalid plugin name should fail validation
+    fs.writeFileSync(
+      path.join(os, 'site_invalid.yml'),
+      yaml.stringify({
+        CNAME: 'invalid.example.com',
+        TARGET_REPO: 'example/invalid',
+        SITE_URL: 'wss://invalid.example.com/bbs',
+        DEV_PROXY_TARGET: 'https://invalid.example.com',
+        DEV_PROXY_HEADER: 'https://invalid.example.com',
+        DEFAULT_PLUGINS: {
+          non_existent_plugin: true,
+        },
+      })
+    );
+
+    assert.throws(() => {
+      execFileSync('python3', [LOAD_SITES_SCRIPT, '--sites-dir', os, '--validate'], {
+        encoding: 'utf-8',
+        cwd: PROJECT_ROOT,
+        stdio: 'pipe',
+      });
+    }, /unknown plugin in DEFAULT_PLUGINS: 'non_existent_plugin'/);
+  } finally {
+    fs.rmSync(os, { recursive: true, force: true });
+  }
+});
+
+

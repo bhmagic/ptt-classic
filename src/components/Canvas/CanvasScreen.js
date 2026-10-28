@@ -1,0 +1,557 @@
+import React from "react";
+import CanvasRenderer from "./CanvasRenderer";
+import CanvasSelection from "./CanvasSelection";
+
+const initialImagePreviewState = {
+  currentImagePreview: undefined,
+  previewHref: undefined,
+  left: undefined,
+  top: undefined,
+};
+
+const resetImagePreviewState = () => ({ ...initialImagePreviewState });
+
+const updateImagePreviewMove = (state, clientX, clientY) => {
+  if (
+    state &&
+    state.currentImagePreview &&
+    (state.left === undefined || state.top === undefined)
+  ) {
+    return { left: clientX, top: clientY };
+  }
+  return null;
+};
+
+export class CanvasScreen extends React.Component {
+  constructor(props) {
+    super(props);
+    this.canvasRef = React.createRef();
+    this.renderer = new CanvasRenderer();
+    this.isMouseDown = false;
+    this.dragStarted = false;
+    this.startPos = { col: 0, row: 0 };
+  }
+
+  state = {
+    currentHighlighted: undefined,
+    ...initialImagePreviewState,
+    selStart: null,
+    selEnd: null,
+  };
+
+  componentDidMount() {
+    this.draw();
+    if (typeof window !== "undefined") {
+      window.addEventListener("mouseup", this.handleGlobalMouseUp);
+      window.addEventListener("mousemove", this.handleGlobalMouseMove);
+    }
+    if (typeof document !== "undefined") {
+      document.addEventListener("term-blink", this.handleBlink);
+    }
+    if (
+      typeof document !== "undefined" &&
+      document.fonts &&
+      document.fonts.ready
+    ) {
+      (async () => {
+        await document.fonts.ready;
+        this.renderer.clearFontCache();
+        this.draw();
+      })();
+    }
+  }
+
+  componentWillUnmount() {
+    if (typeof window !== "undefined") {
+      window.removeEventListener("mouseup", this.handleGlobalMouseUp);
+      window.removeEventListener("mousemove", this.handleGlobalMouseMove);
+    }
+    if (typeof document !== "undefined") {
+      document.removeEventListener("term-blink", this.handleBlink);
+    }
+  }
+
+  componentDidUpdate(prevProps, prevState) {
+    if (
+      (this.props.lines !== prevProps.lines ||
+        (prevProps.enableLinkHoverPreview &&
+          !this.props.enableLinkHoverPreview)) &&
+      this.state.currentImagePreview
+    ) {
+      const resetState =
+        this.props.resetHyperlinkPreviewState || resetImagePreviewState;
+      this.setState(resetState());
+    }
+
+    const layoutOrStyleChanged =
+      this.props.nowHighlight !== prevProps.nowHighlight ||
+      this.props.highlightBG !== prevProps.highlightBG ||
+      this.props.smoothAnsiArt !== prevProps.smoothAnsiArt ||
+      this.props.fontFace !== prevProps.fontFace ||
+      this.props.chw !== prevProps.chw ||
+      this.props.chh !== prevProps.chh ||
+      this.props.scaleX !== prevProps.scaleX ||
+      this.props.scaleY !== prevProps.scaleY ||
+      this.props.fontSize !== prevProps.fontSize ||
+      this.props.cols !== prevProps.cols ||
+      this.props.rows !== prevProps.rows ||
+      this.props.charset !== prevProps.charset ||
+      this.props.colorScheme !== prevProps.colorScheme ||
+      this.props.defaultBg !== prevProps.defaultBg ||
+      this.props.defaultFg !== prevProps.defaultFg ||
+      this.props.defaultLink !== prevProps.defaultLink ||
+      this.props.forcePlainText !== prevProps.forcePlainText ||
+      this.props.minimumContrast !== prevProps.minimumContrast ||
+      (prevState &&
+        this.state.currentHighlighted !== prevState.currentHighlighted);
+
+    if (layoutOrStyleChanged) {
+      this.renderer.markDirty(null);
+    } else if (
+      this.props.lines !== prevProps.lines ||
+      this.props.changedRows !== prevProps.changedRows
+    ) {
+      if (Array.isArray(this.props.changedRows)) {
+        this.renderer.markDirty(this.props.changedRows);
+      } else {
+        this.renderer.markDirty(null);
+      }
+    }
+
+    this.draw();
+  }
+
+  handleBlink = () => {
+    if (this.renderer.hasBlink) {
+      this.renderer.markDirty(null);
+      this.draw();
+    }
+  };
+
+  onBlink = () => {
+    this.handleBlink();
+  };
+
+  setCurrentHighlighted = (currentHighlighted) => {
+    this.setState({ currentHighlighted });
+  };
+
+  getCols() {
+    return (
+      this.props.cols ||
+      (this.props.lines && this.props.lines[0]
+        ? this.props.lines[0].length
+        : 80)
+    );
+  }
+
+  getRows() {
+    return this.props.rows || (this.props.lines ? this.props.lines.length : 24);
+  }
+
+  getChw() {
+    if (this.props.chw) return this.props.chw;
+    const chh = this.getChh();
+    return Math.floor(chh / 2);
+  }
+
+  getChh() {
+    return this.props.chh || this.props.forceWidth || 24;
+  }
+
+  getScaleX() {
+    return this.props.scaleX || 1;
+  }
+
+  getScaleY() {
+    return this.props.scaleY || 1;
+  }
+
+  getGridPos = (e) => {
+    return CanvasSelection.getGridPos(
+      e,
+      this.canvasRef.current,
+      this.getCols(),
+      this.getRows()
+    );
+  };
+
+  getNormalizedSelection() {
+    return CanvasSelection.getNormalizedSelection(
+      this.state.selStart,
+      this.state.selEnd
+    );
+  }
+
+  getSelectionColRow = () => {
+    return CanvasSelection.getSelectionColRow(
+      this.state.selStart,
+      this.state.selEnd,
+      this.props.lines,
+      this.props.charset
+    );
+  };
+
+  getSelectedText = () => {
+    return CanvasSelection.getSelectedText(
+      this.state.selStart,
+      this.state.selEnd,
+      this.props.lines,
+      this.getCols(),
+      this.props.charset
+    );
+  };
+
+  selectAll = () => {
+    const cols = this.getCols();
+    const rows = this.getRows();
+    this.isMouseDown = false;
+    this.dragStarted = true;
+    this.startPos = { col: 0, row: 0 };
+    const selStart = { col: 0, row: 0 };
+    const selEnd = { col: cols - 1, row: rows - 1 };
+    this.state.selStart = selStart;
+    this.state.selEnd = selEnd;
+    this.setState(
+      {
+        selStart,
+        selEnd,
+      },
+      () => {
+        this.draw();
+        this.props.setInputAreaFocus();
+      }
+    );
+    this.draw();
+  };
+
+  startSelection = (coords) => {
+    const pos = this.getGridPos(coords);
+    this.isMouseDown = true;
+    this.dragStarted = true;
+    this.startPos = pos;
+    const line = this.props.lines && this.props.lines[pos.row];
+    const cols = this.getCols();
+    const wordSel = CanvasSelection.getWordSelection(pos, line, cols);
+    this.setState(wordSel);
+  };
+
+  updateSelection = (coords) => {
+    if (!this.startPos) {
+      this.startSelection(coords);
+      return;
+    }
+    const pos = this.getGridPos(coords);
+    if (
+      !this.dragStarted &&
+      (pos.col !== this.startPos.col || pos.row !== this.startPos.row)
+    ) {
+      this.dragStarted = true;
+    }
+    if (this.dragStarted) {
+      const selEnd = this.state.selEnd;
+      if (
+        !selEnd ||
+        selEnd.col !== pos.col ||
+        selEnd.row !== pos.row ||
+        this.state.selStart !== this.startPos
+      ) {
+        this.setState({ selStart: this.startPos, selEnd: pos });
+      }
+    }
+  };
+
+  endSelection = () => {
+    this.isMouseDown = false;
+    if (!this.dragStarted) {
+      this.setState({ selStart: null, selEnd: null });
+      return "";
+    }
+    return this.getSelectedText() || "";
+  };
+
+  clearSelection = () => {
+    this.isMouseDown = false;
+    this.dragStarted = false;
+    this.hadSelectionOnMouseDown = false;
+    this.startPos = null;
+    this.setState({ selStart: null, selEnd: null });
+  };
+
+  handleMouseDown = (e) => {
+    if (e.button !== 0 || e.ctrlKey) return;
+    this.hadSelectionOnMouseDown = Boolean(this.getNormalizedSelection());
+    if (e.target && e.target.tagName !== "A") {
+      e.preventDefault();
+      if (
+        typeof document !== "undefined" &&
+        document.activeElement &&
+        document.activeElement.id === "t" &&
+        !(typeof window !== "undefined" && window.app?.view?.isComposition)
+      ) {
+        document.activeElement.blur();
+      }
+    }
+    const pos = this.getGridPos(e);
+
+    if (e.detail === 2) {
+      const line = this.props.lines && this.props.lines[pos.row];
+      const cols = this.getCols();
+      this.setState(CanvasSelection.getWordSelection(pos, line, cols), () => {
+        this.props.setInputAreaFocus(true);
+      });
+      return;
+    } else if (e.detail === 3) {
+      const cols = this.getCols();
+      this.setState(CanvasSelection.getLineSelection(pos, cols), () => {
+        this.props.setInputAreaFocus(true);
+      });
+      return;
+    }
+
+    this.isMouseDown = true;
+    this.dragStarted = false;
+    this.startPos = pos;
+    this.setState({ selStart: pos, selEnd: pos });
+  };
+
+  handleGlobalMouseMove = (e) => {
+    if (this.isMouseDown) {
+      const pos = this.getGridPos(e);
+      if (
+        !this.dragStarted &&
+        (pos.col !== this.startPos.col || pos.row !== this.startPos.row)
+      ) {
+        this.dragStarted = true;
+      }
+      if (this.dragStarted) {
+        const selEnd = this.state.selEnd;
+        if (!selEnd || selEnd.col !== pos.col || selEnd.row !== pos.row) {
+          this.setState({ selEnd: pos });
+        }
+      }
+    }
+  };
+
+  handleGlobalMouseUp = (e) => {
+    if (e.button !== 0 || e.ctrlKey || !this.isMouseDown) return;
+    this.isMouseDown = false;
+    this.props.setInputAreaFocus(true);
+    if (!this.dragStarted) {
+      this.setState({ selStart: null, selEnd: null });
+    } else {
+      if (this.props.copyOnSelect) {
+        const text = this.getSelectedText();
+        if (text) {
+          this.props.doCopy(text);
+        }
+      }
+    }
+  };
+
+  handleMouseMove = (e) => {
+    const clientX = e?.clientX;
+    const clientY = e?.clientY;
+    this.props.onHyperlinkMove?.(e, { screen: this });
+
+    const updateMove =
+      this.props.updateHyperlinkPreviewMove || updateImagePreviewMove;
+    const nextPos = updateMove(this.state, clientX, clientY);
+    if (nextPos) {
+      this.setState(nextPos);
+    }
+  };
+
+  handleHyperLinkMouseOver = (e) => {
+    const href = e && e.currentTarget ? e.currentTarget.href : undefined;
+    const propHandled = this.props.onHyperlinkHover?.(e, href, {
+      screen: this,
+    });
+
+    if (propHandled === false) {
+      return;
+    }
+
+    if (this.props.enableLinkHoverPreview && href) {
+      if (this.state.currentImagePreview && this.state.previewHref === href) {
+        return;
+      }
+      const createRequest = this.props.createHyperlinkPreviewRequest;
+      const request = createRequest?.(href);
+      if (request) {
+        this.setState({
+          currentImagePreview: request,
+          previewHref: href,
+          left: e.clientX,
+          top: e.clientY,
+        });
+      }
+    }
+  };
+
+  handleHyperLinkMouseOut = (e) => {
+    if (
+      e &&
+      e.relatedTarget &&
+      e.currentTarget &&
+      e.currentTarget.contains(e.relatedTarget)
+    ) {
+      return;
+    }
+
+    const propHandled = this.props.onHyperlinkLeave?.(e, { screen: this });
+
+    if (propHandled === false) {
+      return;
+    }
+
+    const resetState =
+      this.props.resetHyperlinkPreviewState || resetImagePreviewState;
+    this.setState(resetState());
+  };
+
+  handleHyperLinkClick = (e) => {
+    if (
+      this.dragStarted ||
+      this.hadSelectionOnMouseDown ||
+      this.getNormalizedSelection()
+    ) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  };
+
+  renderLinkOverlays() {
+    const { lines } = this.props;
+    if (!lines) return null;
+    const cols = this.getCols();
+    const chw = this.getChw() * this.getScaleX();
+    const chh = this.getChh() * this.getScaleY();
+    const links = [];
+
+    for (let r = 0; r < lines.length; ++r) {
+      const line = lines[r];
+      if (!line) continue;
+      let c = 0;
+      while (c < cols) {
+        const ch = line[c];
+        if (ch && ch.isStartOfURL()) {
+          const startCol = c;
+          const href = ch.getFullURL();
+          c++;
+          while (c < cols && line[c] && line[c].isPartOfURL() && !line[c].isStartOfURL()) {
+            c++;
+          }
+          const endCol = c;
+          const isAction = typeof href === "string" && href.includes("#aid=");
+          links.push(
+            <a
+              key={`link-${r}-${startCol}`}
+              href={href}
+              target={isAction ? undefined : "_blank"}
+              rel={isAction ? undefined : "noopener noreferrer"}
+              data-srow={r}
+              data-scol={startCol}
+              draggable="false"
+              onDragStart={(e) => e.preventDefault()}
+              onClick={this.handleHyperLinkClick}
+              onMouseOver={this.handleHyperLinkMouseOver}
+              onMouseOut={this.handleHyperLinkMouseOut}
+              style={{
+                position: "absolute",
+                left: `${startCol * chw}px`,
+                top: `${r * chh}px`,
+                width: `${(endCol - startCol) * chw}px`,
+                height: `${chh}px`,
+                display: "block",
+                cursor: "pointer",
+                zIndex: 2,
+                opacity: 0,
+              }}
+            />
+          );
+        } else {
+          c++;
+        }
+      }
+    }
+    return links;
+  }
+
+  draw() {
+    const canvas = this.canvasRef.current;
+    if (!canvas) return;
+
+    this.renderer.draw(canvas, {
+      cols: this.getCols(),
+      rows: this.getRows(),
+      chw: this.getChw(),
+      chh: this.getChh(),
+      scaleX: this.getScaleX(),
+      scaleY: this.getScaleY(),
+      fontSize: this.props.fontSize,
+      lines: this.props.lines,
+      charset: this.props.charset,
+      currentHighlighted: this.state.currentHighlighted,
+      nowHighlight: this.props.nowHighlight,
+      highlightBG: this.props.highlightBG,
+      smoothAnsiArt: this.props.smoothAnsiArt,
+      fontFace: this.props.fontFace,
+      onRenderFrame: this.props.onRenderFrame,
+      selStart: this.state.selStart,
+      selEnd: this.state.selEnd,
+    });
+  }
+
+  renderHyperlinkPreview() {
+    if (typeof this.props.renderHyperlinkPreview !== "function") {
+      return null;
+    }
+    const previewState = {
+      request: this.state.currentImagePreview,
+      href: this.state.previewHref,
+      left: this.state.left,
+      top: this.state.top,
+    };
+    return this.props.renderHyperlinkPreview(previewState);
+  }
+
+  render() {
+    const cols = this.getCols();
+    const rows = this.getRows();
+    const chw = this.getChw();
+    const chh = this.getChh();
+    const scaleX = this.getScaleX();
+    const scaleY = this.getScaleY();
+    const width = cols * chw * scaleX;
+    const height = rows * chh * scaleY;
+
+    return (
+      <div
+        id="mainContainer"
+        onMouseMove={this.handleMouseMove}
+        onMouseDown={this.handleMouseDown}
+        style={{
+          position: "relative",
+          width: `${width}px`,
+          height: `${height}px`,
+          userSelect: "none",
+          WebkitUserSelect: "none",
+        }}
+      >
+        <canvas
+          ref={this.canvasRef}
+          style={{
+            display: "block",
+            width: `${width}px`,
+            height: `${height}px`,
+          }}
+        />
+        {this.renderLinkOverlays()}
+        {this.renderHyperlinkPreview()}
+      </div>
+    );
+  }
+}
+
+export default CanvasScreen;

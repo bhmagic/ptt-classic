@@ -1,0 +1,881 @@
+{
+  "appName": {
+    "message": "PTT Term",
+    "description": "The title of the application, displayed in the web store."
+  },
+  "menu_settings": {
+    "message": "設定"
+  },
+  "cmenu_copy": {
+    "message": "複製"
+  },
+  "cmenu_copyAnsi": {
+    "message": "複製 (包含 ANSI 顏色)"
+  },
+  "cmenu_paste": {
+    "message": "貼上"
+  },
+  "cmenu_selectAll": {
+    "message": "全選"
+  },
+  "cmenu_searchGoogle": {
+    "message": "在 Google 上搜尋"
+  },
+  "cmenu_openUrlNewTab": {
+    "message": "在新分頁中開啟連結"
+  },
+  "cmenu_copyLinkUrl": {
+    "message": "複製連結網址"
+  },
+  "cmenu_mouseBrowsing": {
+    "message": "滑鼠瀏覽"
+  },
+  "cmenu_easyReading": {
+    "message": "好讀模式"
+  },
+  "cmenu_showInputHelper": {
+    "message": "輸入小幫手 ..."
+  },
+  "cmenu_showLiveArticleHelper": {
+    "message": "Live 文小幫手 ..."
+  },
+  "cmenu_login_assist": {
+    "message": "輔助登入 ..."
+  },
+  "cmenu_auto_login": {
+    "message": "輔助登入 ..."
+  },
+  "cmenu_settings": {
+    "message": "設定"
+  },
+  "cmenu_bug_report": {
+    "message": "問題回報"
+  },
+  "options_general": {
+    "message": "一般"
+  },
+  "options_plugins": {
+    "message": "附加功能"
+  },
+  "options_plugins_desc": {
+    "message": "管理附加的功能與自訂模組"
+  },
+  "options_expand": {
+    "message": "展開選項"
+  },
+  "options_collapse": {
+    "message": "收起選項"
+  },
+  "options_plugin_options": {
+    "message": "選項"
+  },
+  "options_about": {
+    "message": "關於"
+  },
+  "plugin_group_ui": {
+    "message": "使用者介面"
+  },
+  "plugin_group_bbs": {
+    "message": "台灣 BBS"
+  },
+  "plugin_group_debug": {
+    "message": "開發與除錯"
+  },
+  "plugin_group_other": {
+    "message": "其他"
+  },
+  "plugin_easy_reading_title": {
+    "message": "好讀模式"
+  },
+  "plugin_easy_reading_desc": {
+    "message": "閱讀文章時自動拼接後續分頁，支援圖片/影片預覽、推文即時更新與連續捲動。"
+  },
+  "plugin_live_update_title": {
+    "message": "Live 文小幫手"
+  },
+  "plugin_live_update_desc": {
+    "message": "在閱讀文章時定時自動重新整理推文（如每秒自動送出 r），支援快速鍵與懸浮控制面板。"
+  },
+  "plugin_anti_idle_title": {
+    "message": "防閒置斷線"
+  },
+  "plugin_anti_idle_desc": {
+    "message": "當終端機閒置超過指定時間時，自動向站台發送 keepalive 訊號以維持連線。"
+  },
+  "plugin_auto_wrap_title": {
+    "message": "自動換行"
+  },
+  "plugin_auto_wrap_desc": {
+    "message": "貼上長文時若超過指定長度則自動換行，避免 BBS 文章或推文截斷與排版混亂。"
+  },
+  "plugin_media_previewer_title": {
+    "message": "圖片與媒體預覽"
+  },
+  "plugin_media_previewer_desc": {
+    "message": "當滑鼠懸停於圖片或媒體連結時顯示預覽浮動視窗，支援 Imgur 等常用圖床與安全網域白名單。"
+  },
+  "plugin_packet_dump_title": {
+    "message": "封包傾印 (Packet Dump)"
+  },
+  "plugin_packet_dump_desc": {
+    "message": "即時擷取與檢視底層傳輸的原始 WebSocket / Telnet 十六進位封包資料流。"
+  },
+  "plugin_fps_meter_title": {
+    "message": "畫面更新率 (FPS)"
+  },
+  "plugin_fps_meter_desc": {
+    "message": "即時監控並在角落顯示終端機影格更新率 (FPS) 與渲染耗時，支援切換 Canvas/DOM 與平滑字型。"
+  },
+  "plugin_touch_debug_hud_title": {
+    "message": "觸控與鍵盤診斷面板"
+  },
+  "plugin_touch_debug_hud_desc": {
+    "message": "在螢幕上顯示行動裝置觸控、虛擬鍵盤、視區尺寸與事件即時診斷 HUD，並可一鍵複製診斷報告。"
+  },
+  "plugin_mouse_browsing_title": {
+    "message": "滑鼠瀏覽"
+  },
+  "plugin_mouse_browsing_desc": {
+    "message": "使用滑鼠點擊與滾輪瀏覽 BBS，支援點擊進入看板與文章、選取文字與高亮效果。"
+  },
+  "plugin_input_helper_title": {
+    "message": "輸入小幫手"
+  },
+  "plugin_input_helper_desc": {
+    "message": "提供視覺化輸入小幫手面板，支援 ANSI 色彩代碼、特殊符號、常用標點與表情符號輸入。"
+  },
+  "plugin_login_assist_title": {
+    "message": "輔助登入"
+  },
+  "plugin_login_assist_desc": {
+    "message": "提供帳號密碼登入視窗，可利用瀏覽器密碼管理員記住密碼並代輸出至終端機。"
+  },
+  "plugin_auto_login_title": {
+    "message": "輔助登入"
+  },
+  "plugin_auto_login_desc": {
+    "message": "提供帳號密碼登入視窗，可利用瀏覽器密碼管理員記住密碼並代輸出至終端機。"
+  },
+  "login_modal_title": {
+    "message": "帳號登入"
+  },
+  "login_modal_desc": {
+    "message": "利用瀏覽器自動填入或記憶密碼，本程式不會另外儲存您的帳號與密碼。註冊新帳號請按取消。"
+  },
+  "login_modal_username": {
+    "message": "帳號"
+  },
+  "login_modal_password": {
+    "message": "密碼"
+  },
+  "login_modal_username_placeholder": {
+    "message": "請輸入帳號"
+  },
+  "login_modal_password_placeholder": {
+    "message": "請輸入密碼"
+  },
+  "login_modal_submit": {
+    "message": "登入"
+  },
+  "login_modal_cancel": {
+    "message": "取消"
+  },
+  "login_modal_disable": {
+    "message": "停用"
+  },
+  "login_modal_logging_in": {
+    "message": "登入中..."
+  },
+  "options_picPreviewWhitelistOnly": {
+    "message": "僅預覽受信任圖床的圖片 (建議開啟，維護隱私與安全)"
+  },
+  "options_trustedDomains_title": {
+    "message": "允許的圖床網域白名單"
+  },
+  "options_trustedDomains_placeholder": {
+    "message": "輸入圖床網域 (例如: imgur.com)"
+  },
+  "options_trustedDomains_empty": {
+    "message": "尚未設定任何受信任圖床網域。"
+  },
+  "imagePreview_loading": {
+    "message": "載入圖片中..."
+  },
+  "imagePreview_failed": {
+    "message": "無法載入圖片預覽"
+  },
+  "options_warnBeforeClose": {
+    "message": "連線中關閉或重新整理視窗前確認 (防呆提醒)"
+  },
+  "options_trimTrailingSpaces": {
+    "message": "複製時自動修剪行尾空白"
+  },
+  "options_enableBell": {
+    "message": "終端機提示音 (Bell)"
+  },
+  "options_enableVisualBell": {
+    "message": "螢幕閃爍警示 (Visual Bell)"
+  },
+  "options_lineHeight": {
+    "message": "行距 / 行高"
+  },
+  "options_backspaceKey": {
+    "message": "Backspace 鍵送出"
+  },
+  "options_deleteKey": {
+    "message": "Delete 鍵送出"
+  },
+  "options_keyControlH": {
+    "message": "Control-H (將送出 ^H (ASCII 8))"
+  },
+  "options_keyControlQuestion": {
+    "message": "Control-? (將送出 ^? (ASCII 127))"
+  },
+  "options_keyEscapeSequence": {
+    "message": "標準跳脫字元序列 (將送出 ^[[3~ (ESC [ 3 ~))"
+  },
+  "options_bellAlways": {
+    "message": "隨時播放提示音"
+  },
+  "options_bellBackground": {
+    "message": "僅在背景時播放 (視窗不在前景)"
+  },
+  "options_bellOff": {
+    "message": "關閉 (靜音)"
+  },
+  "options_endTurnsOnLiveUpdate": {
+    "message": "END 啟用推文即時更新 (如 Alt + r)"
+  },
+  "options_liveUpdateInterval": {
+    "message": "更新頻率"
+  },
+  "options_liveUpdateIntervalSec": {
+    "message": "秒"
+  },
+  "options_showLiveUpdateToolbar": {
+    "message": "顯示懸浮控制面板"
+  },
+  "options_copyOnSelect": {
+    "message": "選取文字時自動複製文字"
+  },
+  "options_antiIdleTime": {
+    "message": "防閒置間隔 (秒)"
+  },
+  "options_lineWrap": {
+    "message": "貼上長文時超過此長度自動換行"
+  },
+  "options_lineWrap_unit": {
+    "message": "字元"
+  },
+  "options_advanced": {
+    "message": "進階"
+  },
+  "options_uiLocale": {
+    "message": "介面語言"
+  },
+  "options_locale_auto": {
+    "message": "自動 (跟隨系統語言)"
+  },
+  "options_locale_zhTW": {
+    "message": "正體中文 (繁體中文)"
+  },
+  "options_locale_enUS": {
+    "message": "English (英文)"
+  },
+  "options_useCanvasEngine": {
+    "message": "以 HTML5 Canvas 技術繪製畫面"
+  },
+  "options_renderEngine": {
+    "message": "渲染引擎"
+  },
+  "options_renderEngineCanvas": {
+    "message": "Canvas Engine (預設，高效能)"
+  },
+  "options_renderEngineDOM": {
+    "message": "DOM Engine (相容性模式)"
+  },
+  "options_smoothAnsiArt": {
+    "message": "平滑化 ANSI 藝術 (需要 Canvas 模式)"
+  },
+  "options_reset": {
+    "message": "設回預設值"
+  },
+  "options_appearance": {
+    "message": "外觀"
+  },
+  "options_colorScheme": {
+    "message": "配色主題"
+  },
+  "options_colorScheme_default": {
+    "message": "經典黑底 (1987 年 IBM VGA 硬體標準 16 色)"
+  },
+  "options_colorScheme_pureBw": {
+    "message": "純黑白 (無障礙單色模式，忽略所有 ANSI 色彩與狀態列底色)"
+  },
+  "options_colorScheme_solarizedDark": {
+    "message": "日光暗色 (Solarized Dark - Ethan Schoonover 設計之科學精密護眼低對比配色，適合長時間閱讀)"
+  },
+  "options_colorScheme_nord": {
+    "message": "北歐極光 (Nord - 源自北極冰川與極光之現代冷調極簡美學配色)"
+  },
+  "options_colorScheme_monokai": {
+    "message": "摩諾開 (Monokai - Sublime Text 經典預設主題，深暖炭灰底搭配高彩度鮮明對比)"
+  },
+  "options_colorScheme_dracula": {
+    "message": "德古拉 (Dracula - 當代最熱門跨平台暗黑主題，深紫灰底搭配高辨識度粉紫亮彩)"
+  },
+  "options_colorScheme_retroAmber": {
+    "message": "懷舊琥珀 (Amber CRT - 致敬 1970-80 年代 P3 琥珀磷光單色終端機，零藍光適合深夜暗室護眼)"
+  },
+  "options_colorScheme_retroGreen": {
+    "message": "復古綠 (Green CRT - 致敬早期 IBM 5151 / Apple II 經典 P1 綠磷光單色顯像管螢幕)"
+  },
+  "options_colorScheme_custom": {
+    "message": "自訂顏色 (自由調配專屬預設底色、文字、超連結與 16 色 ANSI 色盤)"
+  },
+  "options_colorScheme_customHint": {
+    "message": "點擊色塊可自訂各 ANSI 顏色"
+  },
+  "options_colorScheme_resetCustom": {
+    "message": "重設為預設顏色"
+  },
+  "options_colorScheme_customizeThis": {
+    "message": "以目前主題為基底自訂顏色"
+  },
+  "options_colorScheme_defaultColors": {
+    "message": "預設顏色"
+  },
+  "options_colorScheme_defaultBg": {
+    "message": "底色"
+  },
+  "options_colorScheme_defaultFg": {
+    "message": "文字"
+  },
+  "options_colorScheme_defaultLink": {
+    "message": "超連結"
+  },
+  "options_minimumContrast": {
+    "message": "最低對比度保證 (Minimum Contrast)"
+  },
+  "options_minimumContrast_desc": {
+    "message": "當文字與背景顏色過於接近時，自動調整文字明暗度以確保清晰可讀 (致敬 iTerm2)"
+  },
+  "options_minimumContrast_off": {
+    "message": "關閉"
+  },
+  "options_cursorStyle": {
+    "message": "文字游標 (Caret) 樣式"
+  },
+  "options_caretIbeam": {
+    "message": "垂直線"
+  },
+  "options_caretBlock": {
+    "message": "實心方塊"
+  },
+  "options_caretHalfBlock": {
+    "message": "半高方塊"
+  },
+  "options_caretUnderline": {
+    "message": "底線"
+  },
+  "options_caretBlink": {
+    "message": "閃爍游標 (Blink Caret)"
+  },
+  "options_termMargin": {
+    "message": "周圍邊距 (像素)"
+  },
+  "options_termSize": {
+    "message": "終端機大小"
+  },
+  "options_cols": {
+    "message": "寬"
+  },
+  "options_rows": {
+    "message": "高"
+  },
+  "options_fontSize": {
+    "message": "字體大小 (px)"
+  },
+  "options_fixedTermSize": {
+    "message": "固定終端機大小 (依視窗縮放字體，預設 80×24)"
+  },
+  "options_fixedFontSize": {
+    "message": "固定字體大小 (依視窗大小自動增減行列數)"
+  },
+  "options_touchFixedFontNote": {
+    "message": "觸控介面固定使用字體大小並支援平移"
+  },
+  "options_fontFitWindowWidth": {
+    "message": "把字體拉大來補滿畫面"
+  },
+  "options_fontFace": {
+    "message": "字型"
+  },
+  "options_fontFaceAndPriority": {
+    "message": "字型與優先順序"
+  },
+  "options_mouse": {
+    "message": "滑鼠"
+  },
+  "options_rightClickAction": {
+    "message": "滑鼠右鍵動作"
+  },
+  "options_rightClickAction_menu": {
+    "message": "顯示右鍵選單 (預設)"
+  },
+  "options_rightClickAction_paste": {
+    "message": "直接貼上剪貼簿內容 (Shift + 右鍵開啟選單)"
+  },
+  "options_mouseWheelAction": {
+    "message": "滑鼠滾輪"
+  },
+  "options_mouseWheelRightAction": {
+    "message": "滑鼠右鍵 + 滑鼠滾輪"
+  },
+  "options_mouseWheelLeftAction": {
+    "message": "滑鼠左鍵 + 滑鼠滾輪"
+  },
+  "options_mouseWheelTrackpadMode": {
+    "message": "偵測觸控板滾動慣性"
+  },
+  "options_mouseWheelTrackpadMode_desc": {
+    "message": "平滑化觸控板捲動並吸收滑動慣性，避免一次捲動過多行數或誤觸。一般滑鼠使用者無須開啟。"
+  },
+  "options_mouseWheelChangePost": {
+    "message": "閱讀文章滾輪捲動到底部／頂部時自動換篇"
+  },
+  "options_mouseWheelChangePost_desc": {
+    "message": "在閱讀文章（含好讀模式）捲動到最頂端或最底端時，停頓後再次滾動滾輪可切換至上一篇或下一篇文章。關閉時滾輪只會停在文章邊界。"
+  },
+  "options_enableBackNavigation": {
+    "message": "支援瀏覽器「上一頁」與觸控板左滑返回"
+  },
+  "options_enableBackNavigation_desc": {
+    "message": "將觸控板雙指左滑手勢、滑鼠側鍵與瀏覽器返回鍵轉為左方向鍵（←），避免誤觸離開網站。"
+  },
+  "options_mouseWheelAction_arrow1": {
+    "message": "發送上下方向鍵 - 每次 1 行 (模擬按 1 次上 / 下鍵)"
+  },
+  "options_mouseWheelAction_arrow2": {
+    "message": "發送上下方向鍵 - 每次 2 行 (模擬按 2 次上 / 下鍵)"
+  },
+  "options_mouseWheelAction_arrow3": {
+    "message": "發送上下方向鍵 - 每次 3 行 (模擬按 3 次上 / 下鍵)"
+  },
+  "options_mouseWheelAction_arrow5": {
+    "message": "發送上下方向鍵 - 每次 5 行 (模擬按 5 次上 / 下鍵)"
+  },
+  "options_mouseWheelAction_page": {
+    "message": "發送上下翻頁鍵 PageUp / PageDown (模擬按翻頁鍵)"
+  },
+  "options_mouseWheelAction_none": {
+    "message": "無動作 (不處理滑鼠滾輪事件)"
+  },
+  "options_mouseBrowsingHighlight": {
+    "message": "啟用滑鼠瀏覽的底色效果"
+  },
+  "options_mouseBrowsingGuide_toggle": {
+    "message": "查看滑鼠瀏覽熱區圖解"
+  },
+  "options_mouseBrowsingGuide_hide": {
+    "message": "隱藏滑鼠瀏覽熱區圖解"
+  },
+  "options_mouseBrowsingGuide_tabList": {
+    "message": "看板 / 文章列表"
+  },
+  "options_mouseBrowsingGuide_tabReading": {
+    "message": "閱讀文章內容"
+  },
+  "options_mouseBrowsingGuide_home": {
+    "message": "Home (第一頁)"
+  },
+  "options_mouseBrowsingGuide_end": {
+    "message": "End (最後一頁)"
+  },
+  "options_mouseBrowsingGuide_pageUp": {
+    "message": "Page Up (上一頁)"
+  },
+  "options_mouseBrowsingGuide_pageDown": {
+    "message": "Page Down (下一頁)"
+  },
+  "options_mouseBrowsingGuide_back": {
+    "message": "方向鍵左 (返回上一層)"
+  },
+  "options_mouseBrowsingGuide_enter": {
+    "message": "Enter (進入看板 / 閱讀文章)"
+  },
+  "options_mouseBrowsingGuide_firstThread": {
+    "message": "= (同主題首篇)"
+  },
+  "options_mouseBrowsingGuide_prevThread": {
+    "message": "[ (同主題上篇)"
+  },
+  "options_mouseBrowsingGuide_nextThread": {
+    "message": "] (同主題下篇)"
+  },
+  "options_mouseBrowsingGuide_lastThread": {
+    "message": "同主題最後一篇"
+  },
+  "options_mouseBrowsingGuide_refresh": {
+    "message": "重新整理推文"
+  },
+  "options_supportMouseReporting": {
+    "message": "原生滑鼠與觸控支援"
+  },
+  "options_supportMouseReporting_desc": {
+    "message": "向伺服器回報原生滑鼠與觸控座標／捲動資訊（Mouse & Touch Reporting）。需伺服器端啟用支援（如個人設定中的 MOUSE 選項）。"
+  },
+  "options_highlightColor": {
+    "message": "底色"
+  },
+  "options_mouseLeftFunction": {
+    "message": "滑鼠左鍵"
+  },
+  "options_mouseMiddleFunction": {
+    "message": "滑鼠中鍵"
+  },
+  "options_none": {
+    "message": "無動作"
+  },
+  "options_doPaste": {
+    "message": "直接貼上剪貼簿內容"
+  },
+  "options_leftKey": {
+    "message": "送出左方向鍵"
+  },
+  "options_rightKey": {
+    "message": "送出右方向鍵"
+  },
+  "options_enterKey": {
+    "message": "送出ENTER鍵"
+  },
+  "options_upKey": {
+    "message": "送出上方向鍵"
+  },
+  "options_downKey": {
+    "message": "送出下方向鍵"
+  },
+  "options_pageUpKey": {
+    "message": "送出 PageUp 鍵"
+  },
+  "options_pageDownKey": {
+    "message": "送出 PageDown 鍵"
+  },
+  "options_escKey": {
+    "message": "送出 ESC 鍵"
+  },
+  "options_upDown": {
+    "message": "控制上 / 下"
+  },
+  "options_pageUpDown": {
+    "message": "控制上頁 / 下頁"
+  },
+  "options_threadLastNext": {
+    "message": "控制文章前篇 / 下篇"
+  },
+  "about_appName_subtitle": {
+    "message": "WebSocket 終端機連線程式"
+  },
+  "about_description": {
+    "message": "修改自 PttChrome 套件，原作者為 #link_github_iamchucky#。由 #link_github_robertabcd# 移植為 HTML5 WebSocket 網頁版。雙色字渲染重構、動態標題、版本資訊與 CI 構建部署由 #link_github_iid# 貢獻。現代化架構、Canvas 繪圖引擎與觸控介面由 #link_github_hungte# 貢獻。最新官方專案為 #link_github_ptt# 組織旗下的 #link_official_PttTerm#。"
+  },
+  "about_version_title": {
+    "message": "版本與原始碼"
+  },
+  "about_version_content": {
+    "message": [
+      "目前專案庫：#link_current_repo#",
+      "前代專案庫：#link_robertabcd_PttChrome#",
+      "創始專案庫：#link_iamchucky_PttChrome# (webapp12 2015/06)"
+    ]
+  },
+  "about_version_upstream": {
+    "message": "分支來源：#link_official_PttTerm#"
+  },
+  "about_license_title": {
+    "message": "授權條款"
+  },
+  "about_license_content": {
+    "message": "#link_GPL20#"
+  },
+  "about_bug_report": {
+    "message": "問題回報"
+  },
+  "about_new_title": {
+    "message": "新功能"
+  },
+  "about_new_content": {
+    "message": [
+      "雙繪圖引擎 (Canvas / DOM)",
+      "行動虛擬鍵盤與觸控手勢",
+      "輔助登入"
+    ]
+  },
+  "alert_developerModeHeader": {
+    "message": "開發者模式"
+  },
+  "alert_developerModeText": {
+    "message": "您正在使用開發者模式。此版本並不穩定，無法保證所有功能會正常運作。"
+  },
+  "alert_developerModeDismiss": {
+    "message": "是，我瞭解了"
+  },
+  "alert_connectionHeader": {
+    "message": "你斷線了!"
+  },
+  "alert_connectionText": {
+    "message": "現在要重新連線嗎?"
+  },
+  "alert_connectionReconnect": {
+    "message": "重新連線 (ENTER)"
+  },
+  "alert_pasteShortcutHeader": {
+    "message": "貼上"
+  },
+  "alert_pasteShortcutText": {
+    "message": "請使用 Shift+Insert 快速鍵來貼上。"
+  },
+  "alert_pasteShortcutClose": {
+    "message": "確定"
+  },
+  "inputHelperTitle": {
+    "message": "輸入小幫手"
+  },
+  "colorTitle": {
+    "message": "上色"
+  },
+  "colorHelperSend": {
+    "message": "送出 ANSI 顏色字元"
+  },
+  "colorHelperSendMenuFore": {
+    "message": "只送出前景色彩"
+  },
+  "colorHelperSendMenuBack": {
+    "message": "只送出背景色彩"
+  },
+  "colorHelperSendMenuReset": {
+    "message": "送出色彩還原碼"
+  },
+  "colorHelperBlink": {
+    "message": "閃爍"
+  },
+  "colorHelperPreview": {
+    "message": "▅ 預 覽 ▅"
+  },
+  "colorHelperTooltip1": {
+    "message": "點滑鼠\"左\"鍵選\"前景\"顏色"
+  },
+  "colorHelperTooltip2": {
+    "message": "點滑鼠\"右\"鍵選\"背景\"顏色 (上排)"
+  },
+  "symTitle": {
+    "message": "符號"
+  },
+  "symTitle_general": {
+    "message": "一般"
+  },
+  "symTitle_lineBorders": {
+    "message": "線條邊框"
+  },
+  "symTitle_blocks": {
+    "message": "方塊"
+  },
+  "symTitle_lines": {
+    "message": "線條"
+  },
+  "symTitle_special": {
+    "message": "特殊"
+  },
+  "symTitle_brackets": {
+    "message": "括弧"
+  },
+  "symTitle_greek": {
+    "message": "希臘"
+  },
+  "symTitle_phonetic": {
+    "message": "注音"
+  },
+  "symTitle_math": {
+    "message": "數學"
+  },
+  "symTitle_hiragana": {
+    "message": "平假名"
+  },
+  "symTitle_katakana": {
+    "message": "片假名"
+  },
+  "emoTitle": {
+    "message": "表情"
+  },
+  "emoTitle_angry": {
+    "message": "生氣"
+  },
+  "emoTitle_meh": {
+    "message": "酸民"
+  },
+  "emoTitle_sweat": {
+    "message": "汗顏加三條線"
+  },
+  "emoTitle_happy": {
+    "message": "開心"
+  },
+  "emoTitle_other": {
+    "message": "其他"
+  },
+  "liveHelperEnable": {
+    "message": "啟用"
+  },
+  "liveHelperStateEnabled": {
+    "message": "已啟用"
+  },
+  "liveHelperSpan": {
+    "message": "推文每"
+  },
+  "liveHelperSpanSec": {
+    "message": "秒自動更新"
+  },
+  "options_fontList_title": {
+    "message": "由上而下優先套用，可拖曳或按箭頭調整順序"
+  },
+  "options_fontList_queryDevice": {
+    "message": "抓取本機字型"
+  },
+  "options_fontList_querying": {
+    "message": "讀取本機字型中..."
+  },
+  "options_fontList_queried": {
+    "message": "已載入本機字型"
+  },
+  "options_fontList_restoreDefault": {
+    "message": "恢復預設"
+  },
+  "options_fontList_selectThenAdd": {
+    "message": "選擇字型後新增"
+  },
+  "options_fontList_customOption": {
+    "message": "手動輸入字型名稱..."
+  },
+  "options_fontList_customPlaceholder": {
+    "message": "輸入字型名稱 (例如: Cubic 11)"
+  },
+  "options_fontList_backToSelect": {
+    "message": "返回選單"
+  },
+  "options_fontList_notFound": {
+    "message": "找不到此字型：$1"
+  },
+  "options_fontList_presetGroup": {
+    "message": "常用推薦字型"
+  },
+  "options_fontList_deviceGroup": {
+    "message": "本機已安裝字型"
+  },
+  "options_fontList_add": {
+    "message": "+ 新增"
+  },
+  "options_fontList_preview": {
+    "message": "等寬排版預覽 1234567890\nThe quick brown fox jumps over the lazy dog"
+  },
+  "options_fontList_moveUp": {
+    "message": "上移"
+  },
+  "options_fontList_moveDown": {
+    "message": "下移"
+  },
+  "options_fontList_remove": {
+    "message": "刪除"
+  },
+  "options_fontList_empty": {
+    "message": "尚未設定任何字型，將使用系統預設 monospace。"
+  },
+  "touch_input_sheet_title": {
+    "message": "輸入訊息"
+  },
+  "touch_input_sheet_placeholder": {
+    "message": "輸入訊息或文章內容..."
+  },
+  "touch_input_sheet_send": {
+    "message": "送出"
+  },
+  "touch_input_sheet_send_enter": {
+    "message": "送出換行 (↵)"
+  },
+  "touch_input_sheet_auto_wrap": {
+    "message": "自動折行"
+  },
+  "touch_input_sheet_direct_mode": {
+    "message": "切換終端直接輸入"
+  },
+  "touch_input_sheet_line_over_limit": {
+    "message": "超過單行建議長度 78 字元 (送出時將自動折行)"
+  },
+  "touch_input_sheet_line_limit": {
+    "message": "單行建議長度 (78字元)"
+  },
+  "touch_input_sheet_multi_lines": {
+    "message": "$1 行 · 最大 $2 / 78 B"
+  },
+  "touch_input_sheet_close": {
+    "message": "收起"
+  },
+  "touch_input_sheet_clear": {
+    "message": "清空"
+  },
+  "touch_input_sheet_auto_wrap_compact": {
+    "message": "折行"
+  },
+  "plugin_pwa_prompt_title": {
+    "message": "PWA 安裝指引"
+  },
+  "plugin_pwa_prompt_desc": {
+    "message": "引導使用者安裝為 PWA 獨立應用程式 (支援 iOS / Android / 桌面版)"
+  },
+  "plugin_virtual_keyboard_title": {
+    "message": "虛擬鍵盤 (觸控工具列)"
+  },
+  "plugin_virtual_keyboard_desc": {
+    "message": "在觸控螢幕上提供方向鍵、快捷鍵工具列與行動文字輸入面板"
+  },
+  "cmenu_pwa_install_mobile": {
+    "message": "📱 安裝至主畫面 (PWA)"
+  },
+  "cmenu_pwa_install_desktop": {
+    "message": "💻 安裝桌面版 App (PWA)"
+  },
+  "pwa_prompt_title_ios": {
+    "message": "加入主畫面"
+  },
+  "pwa_prompt_title_android": {
+    "message": "安裝應用程式"
+  },
+  "pwa_prompt_title_desktop": {
+    "message": "安裝桌面版 App"
+  },
+  "pwa_prompt_native_desc": {
+    "message": "安裝為 PWA 獨立應用程式，享有全螢幕瀏覽、獨立視窗與流暢不中斷的連線體驗。"
+  },
+  "pwa_prompt_ios_desc": {
+    "message": "加入主畫面可享受沉浸式全螢幕終端、全黑狀態列與完整的觸控體驗："
+  },
+  "pwa_prompt_android_desc": {
+    "message": "加入主畫面可享有全螢幕獨立視窗體驗："
+  },
+  "pwa_prompt_desktop_desc": {
+    "message": "安裝為桌面應用程式，享受乾淨獨立視窗與專屬桌面捷徑："
+  },
+  "pwa_prompt_btn_install": {
+    "message": "立即安裝"
+  },
+  "pwa_prompt_btn_got_it": {
+    "message": "我知道了"
+  },
+  "pwa_prompt_btn_later": {
+    "message": "稍後再說"
+  },
+  "pwa_prompt_btn_remind_later": {
+    "message": "下次提醒我"
+  },
+  "pwa_prompt_btn_not_needed": {
+    "message": "我不需要"
+  }
+}

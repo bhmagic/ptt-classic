@@ -1,0 +1,300 @@
+import { EventEmitter } from './event.js';
+
+function markEventHandled(e) {
+  if (!e) return;
+  e.handled = true;
+  e.preventDefault?.();
+  if (!e.defaultPrevented) {
+    try {
+      e.defaultPrevented = true;
+    } catch (_) {
+      // Native DOM Event has only a getter for defaultPrevented
+    }
+  }
+}
+
+export class InputInterceptors extends EventEmitter {
+  constructor(app) {
+    super();
+    this.app = app;
+    this._activeSources = new Set();
+  }
+
+  setActive(active, source = this) {
+    if (active) {
+      this._activeSources.add(source);
+    } else {
+      this._activeSources.delete(source);
+    }
+  }
+
+  hasActive() {
+    if (this._activeSources.size > 0) {
+      return true;
+    }
+    const event = { active: false };
+    return this.emitStoppable('queryActive', event, (e) => Boolean(e.active));
+  }
+
+  isActive() {
+    return this.hasActive();
+  }
+
+  dispatchNavCmd(cmd, context) {
+    const event = {
+      cmd,
+      context,
+      defaultPrevented: false,
+      preventDefault() {
+        this.defaultPrevented = true;
+      },
+    };
+    return this.emitStoppable('navCmd', event);
+  }
+
+  dispatchWheel(e) {
+    const event = {
+      originalEvent: e,
+      deltaY: e ? e.deltaY : 0,
+      handled: false,
+      suppress: false,
+      defaultPrevented: false,
+      preventDefault() {
+        this.defaultPrevented = true;
+        this.handled = true;
+      },
+    };
+    this.emitStoppable(
+      'wheel',
+      event,
+      (ev) => Boolean(ev.handled || ev.suppress || ev.defaultPrevented)
+    );
+    if (event.suppress) {
+      return 'suppress';
+    }
+    if (event.handled || event.defaultPrevented || (e && e.defaultPrevented)) {
+      return true;
+    }
+    return false;
+  }
+
+  dispatchMouseClick(e) {
+    return this.emitStoppable('mouseClick', e);
+  }
+
+  dispatchMouseDown(e) {
+    return this.emitStoppable('mouseDown', e);
+  }
+
+  dispatchMouseUp(e) {
+    return this.emitStoppable('mouseUp', e);
+  }
+
+  dispatchKeyDown(e) {
+    return this.emitStoppable('keyDown', e);
+  }
+
+  dispatchTextInput(e) {
+    return this.emitStoppable('textInput', e);
+  }
+
+  dispatchSelectAll() {
+    const event = {
+      defaultPrevented: false,
+      preventDefault() {
+        this.defaultPrevented = true;
+      },
+    };
+    return this.emitStoppable('selectAll', event);
+  }
+
+  getSelectedText() {
+    const event = { text: null };
+    this.emitStoppable(
+      'getSelectedText',
+      event,
+      (e) => e.text !== null && e.text !== undefined
+    );
+    return event.text;
+  }
+
+  getSelectionColRow() {
+    const event = { colRow: undefined };
+    this.emitStoppable(
+      'getSelectionColRow',
+      event,
+      (e) => e.colRow !== undefined
+    );
+    return event.colRow;
+  }
+
+  getClientToPos(cX, cY) {
+    const event = { cX, cY, pos: undefined };
+    this.emitStoppable('getClientToPos', event, (e) => e.pos !== undefined);
+    return event.pos;
+  }
+
+  getCursorPos(col, row) {
+    const event = { col, row, pos: undefined };
+    this.emitStoppable('getCursorPos', event, (e) => e.pos !== undefined);
+    return event.pos;
+  }
+
+  registerInterceptor(interceptor) {
+    if (!interceptor || this._registeredInterceptors?.has(interceptor)) return;
+    if (!this._registeredInterceptors) {
+      this._registeredInterceptors = new Map();
+    }
+    const handlers = [];
+
+    if (typeof interceptor.handleNavCmd === 'function') {
+      const fn = (e) => {
+        if (interceptor.handleNavCmd(e.cmd, e.context)) {
+          e.preventDefault?.();
+        }
+      };
+      this.on('navCmd', fn);
+      handlers.push(['navCmd', fn]);
+    }
+
+    if (typeof interceptor.handleWheel === 'function') {
+      const fn = (e) => {
+        const res = interceptor.handleWheel(e.originalEvent || e);
+        if (res === 'suppress') {
+          e.suppress = true;
+          e.preventDefault?.();
+        } else if (res) {
+          e.handled = true;
+          e.preventDefault?.();
+        }
+      };
+      this.on('wheel', fn);
+      handlers.push(['wheel', fn]);
+    }
+
+    if (typeof interceptor.handleMouseClick === 'function') {
+      const fn = (e) => {
+        if (interceptor.handleMouseClick(e) && e) {
+          markEventHandled(e);
+        }
+      };
+      this.on('mouseClick', fn);
+      handlers.push(['mouseClick', fn]);
+    }
+
+    if (typeof interceptor.handleMouseDown === 'function') {
+      const fn = (e) => {
+        if (interceptor.handleMouseDown(e) && e) {
+          markEventHandled(e);
+        }
+      };
+      this.on('mouseDown', fn);
+      handlers.push(['mouseDown', fn]);
+    }
+
+    if (typeof interceptor.handleMouseUp === 'function') {
+      const fn = (e) => {
+        if (interceptor.handleMouseUp(e) && e) {
+          markEventHandled(e);
+        }
+      };
+      this.on('mouseUp', fn);
+      handlers.push(['mouseUp', fn]);
+    }
+
+    if (typeof interceptor.handleKeyDown === 'function') {
+      const fn = (e) => {
+        if (interceptor.handleKeyDown(e) && e) {
+          markEventHandled(e);
+        }
+      };
+      this.on('keyDown', fn);
+      handlers.push(['keyDown', fn]);
+    }
+
+    if (typeof interceptor.handleTextInput === 'function') {
+      const fn = (e) => {
+        if (interceptor.handleTextInput(e) && e) {
+          markEventHandled(e);
+        }
+      };
+      this.on('textInput', fn);
+      handlers.push(['textInput', fn]);
+    }
+
+    if (typeof interceptor.isActive === 'function') {
+      const fn = (e) => {
+        if (interceptor.isActive()) {
+          e.active = true;
+        }
+      };
+      this.on('queryActive', fn);
+      handlers.push(['queryActive', fn]);
+    }
+
+    if (typeof interceptor.getSelectedText === 'function') {
+      const fn = (e) => {
+        const text = interceptor.getSelectedText();
+        if (text !== null && text !== undefined) {
+          e.text = text;
+        }
+      };
+      this.on('getSelectedText', fn);
+      handlers.push(['getSelectedText', fn]);
+    }
+
+    if (typeof interceptor.getSelectionColRow === 'function') {
+      const fn = (e) => {
+        const colRow = interceptor.getSelectionColRow();
+        if (colRow !== undefined) {
+          e.colRow = colRow;
+        }
+      };
+      this.on('getSelectionColRow', fn);
+      handlers.push(['getSelectionColRow', fn]);
+    }
+
+    if (typeof interceptor.getClientToPos === 'function') {
+      const fn = (e) => {
+        const pos = interceptor.getClientToPos(e.cX, e.cY);
+        if (pos !== undefined) {
+          e.pos = pos;
+        }
+      };
+      this.on('getClientToPos', fn);
+      handlers.push(['getClientToPos', fn]);
+    }
+
+    if (typeof interceptor.getCursorPos === 'function') {
+      const fn = (e) => {
+        const pos = interceptor.getCursorPos(e.col, e.row);
+        if (pos !== undefined) {
+          e.pos = pos;
+        }
+      };
+      this.on('getCursorPos', fn);
+      handlers.push(['getCursorPos', fn]);
+    }
+
+    if (typeof interceptor.selectAll === 'function') {
+      const fn = (e) => {
+        if (interceptor.selectAll()) {
+          e.preventDefault?.();
+        }
+      };
+      this.on('selectAll', fn);
+      handlers.push(['selectAll', fn]);
+    }
+
+    this._registeredInterceptors.set(interceptor, handlers);
+  }
+
+  unregisterInterceptor(interceptor) {
+    if (!interceptor || !this._registeredInterceptors?.has(interceptor)) return;
+    const handlers = this._registeredInterceptors.get(interceptor);
+    for (const [event, fn] of handlers) {
+      this.off(event, fn);
+    }
+    this._registeredInterceptors.delete(interceptor);
+  }
+}
