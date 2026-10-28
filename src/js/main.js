@@ -1,60 +1,45 @@
-﻿import { App } from './pttchrome';
+import '../conv/uao.js';
+import { App } from './app';
 import { setupI18n } from './i18n';
 import { getQueryVariable } from './util';
-import { readValuesWithDefault } from '../components/ContextMenu/PrefModal';
+import { readValuesWithDefault } from './pref';
 
-function startApp() {
+async function startApp() {
+  if (typeof window !== 'undefined' && (window.name === 'site_auth_target_frame' || window.name === 'ptt_auth_target_frame')) {
+    return;
+  }
   setupI18n();
 
-  const app = new App();
+  // connect params
+  const allowOverride = process.env.ALLOW_OVERRIDE_FROM_QUERY;
+  const siteUrl = (allowOverride && getQueryVariable('site'))
+    || process.env.SITE_URL;
+  const siteType = (allowOverride && (getQueryVariable('type') || getQueryVariable('site_type') || getQueryVariable('profile')))
+    || process.env.SITE_TYPE
+    || 'auto';
 
-  (process.env.DEVELOPER_MODE ? import('../components/DeveloperModeAlert')
-    .then(({DeveloperModeAlert}) => new Promise((resolve, reject) => {
-      const container = document.getElementById('reactAlert')
-      const onDismiss = () => {
-        ReactDOM.unmountComponentAtNode(container)
-        resolve()
-      }
-      ReactDOM.render(
-        <DeveloperModeAlert onDismiss={onDismiss} />,
-        container
-      )
-    })) : Promise.resolve()
-  ).then(() => {
-    // connect.
-    app.connect(
-      process.env.ALLOW_SITE_IN_QUERY && getQueryVariable('site')
-      || process.env.DEFAULT_SITE);
-    // TODO: Call onSymFont for font data when it's implemented.
-    console.log("load pref from storage");
-    app.onValuesPrefChange(readValuesWithDefault());
-    app.setInputAreaFocus();
-    $('#BBSWindow').show();
-    //$('#sideMenus').show();
-    app.onWindowResize();
-  })
+  const app = new App({ siteType, siteUrl });
+  window.app = app;
+
+  if (process.env.DEVELOPER_MODE) {
+    await new Promise((resolve) => {
+      app.showAlert('developerMode', {
+        onDismiss: () => resolve()
+      });
+    });
+  }
+
+  console.log("load pref from storage");
+  app.showTermWindow();
+  app.onValuesPrefChange(app.prefValues || readValuesWithDefault());
+
+  // connect.
+  app.connect(siteUrl, siteType);
+  app.setInputAreaFocus();
 }
 
-function loadTable(url) {
-  return fetch(url).then(response => {
-    if (!response.ok)
-      throw new Error('loadTable failed: ' + response.statusText + ': ' + url);
-    return response.arrayBuffer();
-  });
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', startApp);
+} else {
+  startApp();
 }
-
-function loadResources() {
-  Promise.all([
-    loadTable(require('../conv/b2u_table.bin')),
-    loadTable(require('../conv/u2b_table.bin'))
-  ]).then(function(binData) {
-    window.lib = window.lib || {};
-    window.lib.b2uArray = new Uint8Array(binData[0]);
-    window.lib.u2bArray = new Uint8Array(binData[1]);
-    $(document).ready(startApp);
-  }, function(e) {
-    console.log('loadResources failed: ' + e);
-  });
-}
-
-loadResources();

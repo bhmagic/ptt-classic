@@ -1,45 +1,31 @@
-import $ from "jquery";
 import cx from "classnames";
 import React from "react";
-import { compose, withStateHandlers, withProps, lifecycle } from "recompose";
-import { MenuItem } from "react-bootstrap";
-import { i18n } from "../../js/i18n";
+import { _ } from "../../js/i18n";
+import { normalizeMouseButtonAction, readValuesWithDefault, writeValues } from "../../js/pref";
 import DropdownMenu from "./DropdownMenu";
-import InputHelperModal from "./InputHelperModal";
-import LiveHelperModal from "./LiveHelperModal";
-import PrefModal from "./PrefModal";
-
-function noop() {}
-
-const EVENT_KEY_BY_HOT_KEY = {
-  ["C".charCodeAt(0)]: "copy",
-  ["E".charCodeAt(0)]: "copyLinkUrl",
-  ["P".charCodeAt(0)]: "paste",
-  ["S".charCodeAt(0)]: "searchGoogle",
-  ["T".charCodeAt(0)]: "openUrlNewTab"
-};
+import PrefModal from "../Settings/PrefModal";
 
 const menuHandlerByEventKey = {
-  copy: (pttchrome, { selectedText }) => pttchrome.doCopy(selectedText),
-  copyAnsi: pttchrome => pttchrome.doCopyAnsi(),
-  paste: pttchrome => pttchrome.doPaste(),
-  searchGoogle: (pttchrome, { selectedText }) =>
-    pttchrome.doSearchGoogle(selectedText),
-  openUrlNewTab: (pttchrome, { aElement }) =>
-    pttchrome.doOpenUrlNewTab(aElement),
-  copyLinkUrl: (pttchrome, { contextOnUrl }) => pttchrome.doCopy(contextOnUrl),
-  selectAll: pttchrome => pttchrome.doSelectAll(),
-  mouseBrowsing: pttchrome => pttchrome.switchMouseBrowsing()
+  copy: (app, { selectedText }) => {
+    app.doCopy(selectedText);
+    app.view?.clearSelection?.();
+    app.setInputAreaFocus(true);
+  },
+  copyAnsi: (app) => app.doCopyAnsi(),
+  paste: (app) => app.doPaste(),
+  searchGoogle: (app, { selectedText }) => app.doSearchGoogle(selectedText),
+  openUrlNewTab: (app, { aElement }) => app.doOpenUrlNewTab(aElement),
+  copyLinkUrl: (app, { contextOnUrl }) => app.doCopy(contextOnUrl),
+  selectAll: (app) => app.doSelectAll(),
 };
 
-const onPrefSaveImpl = (pttchrome, values) => {
-  pttchrome.onValuesPrefChange(values);
-  pttchrome.modalShown = false;
-  pttchrome.setInputAreaFocus();
-  pttchrome.switchToEasyReadingMode(pttchrome.view.useEasyReadingMode);
+const onPrefSaveImpl = (app, values) => {
+  app.onValuesPrefChange(values);
+  app.modalShown = false;
+  app.setInputAreaFocus();
 
   return {
-    showsSettings: false
+    showsSettings: false,
   };
 };
 
@@ -48,6 +34,7 @@ const initialState = {
   open: false,
   pageX: 0,
   pageY: 0,
+  anchorRect: null,
   contextOnUrl: "",
   aElement: undefined,
   selectedText: "",
@@ -55,333 +42,601 @@ const initialState = {
   normalEnabled: false,
   selEnabled: false,
   // --- Modal state ---
-  showsInputHelper: false,
-  showsLiveArticleHelper: false,
   showsSettings: false,
-  // --- LiveHelper state ---
-  liveHelperEnabled: false,
-  liveHelperSec: 1
 };
 
-const enhance = compose(
-  withStateHandlers(initialState, {
-    onContextMenu: (state, { pttchrome }) => event => {
-      event.stopPropagation();
-      event.preventDefault();
-      const { CmdHandler } = pttchrome;
-      const doDOMMouseScroll =
-        CmdHandler.getAttribute("doDOMMouseScroll") === "1";
-      if (doDOMMouseScroll) {
-        CmdHandler.setAttribute("doDOMMouseScroll", "0");
+export class ContextMenu extends React.Component {
+  static _registeredItems = [];
+
+  static registerItem(item) {
+    if (!item || !item.id) return;
+    const idx = ContextMenu._registeredItems.findIndex((i) => i.id === item.id);
+    if (idx !== -1) {
+      ContextMenu._registeredItems[idx] = item;
+    } else {
+      ContextMenu._registeredItems.push(item);
+    }
+  }
+
+  static unregisterItem(idOrItem) {
+    const id = typeof idOrItem === "string" ? idOrItem : idOrItem?.id;
+    const idx = ContextMenu._registeredItems.findIndex((i) => i.id === id);
+    if (idx !== -1) {
+      ContextMenu._registeredItems.splice(idx, 1);
+    }
+  }
+
+  static getRegisteredItems() {
+    return [...ContextMenu._registeredItems];
+  }
+
+  getRegisteredItems() {
+    const staticItems = ContextMenu.getRegisteredItems();
+    const appItems = this.props.app?.getContextMenuItems?.() || [];
+    const itemMap = new Map();
+    for (const item of staticItems) {
+      itemMap.set(item.id, item);
+    }
+    for (const item of appItems) {
+      itemMap.set(item.id, item);
+    }
+    return Array.from(itemMap.values()).sort(
+      (a, b) => (a.order ?? 100) - (b.order ?? 100)
+    );
+  }
+
+  _isMounted = false;
+
+  state = {
+    ...initialState,
+    isTouchDevice: false,
+  };
+
+  isInstanceActive = () => {
+    return Boolean(
+      this._isMounted &&
+      this.__v &&
+      this.__v.__ &&
+      (!this.__v.__c || this.__v.__c === this)
+    );
+  };
+
+  setState(updater, callback) {
+    if (!this.isInstanceActive()) {
+      return;
+    }
+    super.setState(updater, callback);
+  }
+
+  checkTouchDevice = () => {
+    if (typeof window === "undefined") return false;
+    return Boolean(
+      "ontouchstart" in window ||
+      (navigator && navigator.maxTouchPoints > 0) ||
+      (window.matchMedia &&
+        (window.matchMedia("(pointer: coarse)").matches ||
+          window.matchMedia("(max-width: 768px)").matches))
+    );
+  };
+
+  componentDidMount() {
+    this._isMounted = true;
+    const { app } = this.props;
+
+    if (app) {
+      app.openContextMenu = (x, y) => {
+        if (!this.isInstanceActive()) return;
+        this.showMenuAt(x, y);
+      };
+      this._onFloatingMenuToggle = ({ event, targetEl } = {}) => {
+        this.handleFloatingMenuToggle(event, targetEl);
+      };
+      app.on("ui:floating-menu-toggle", this._onFloatingMenuToggle);
+      this._onContextMenuUpdate = () => {
+        if (this.isInstanceActive()) {
+          this.forceUpdate();
+        }
+      };
+      app.on("term:context-menu:update", this._onContextMenuUpdate);
+    }
+
+    this.contextMenuHandler = (event) => {
+      if (!this.isInstanceActive()) {
+        const termWindow = document.getElementById("TermWindow");
+        if (termWindow) {
+          termWindow.removeEventListener(
+            "contextmenu",
+            this.contextMenuHandler,
+            true
+          );
+        }
         return;
       }
-      pttchrome.contextMenuShown = true;
-      // just in case the selection get de-selected
-      if (window.getSelection().isCollapsed) {
-        pttchrome.lastSelection = null;
-      } else {
-        pttchrome.lastSelection = pttchrome.view.getSelectionColRow();
-      }
+      this.handleContextMenu(event);
+    };
+    const termWindow = document.getElementById("TermWindow");
+    if (termWindow) {
+      termWindow.addEventListener("contextmenu", this.contextMenuHandler, true);
+    }
 
-      const target = $(event.target);
-      let contextOnUrl = "";
-      let aElement;
-      if (target.is("a")) {
-        contextOnUrl = target.attr("href");
-        aElement = target[0];
-      } else if (target.parent().is("a")) {
-        contextOnUrl = target.parent().attr("href");
-        aElement = target[0].parentNode;
+    this.handleResizeOrTouch = () => {
+      if (!this.isInstanceActive()) {
+        window.removeEventListener("resize", this.handleResizeOrTouch, false);
+        window.removeEventListener(
+          "orientationchange",
+          this.handleResizeOrTouch,
+          false
+        );
+        window.removeEventListener("touchstart", this.handleResizeOrTouch, {
+          passive: true,
+        });
+        return;
       }
+      const isTouch = this.checkTouchDevice();
+      if (isTouch !== this.state.isTouchDevice) {
+        this.setState({ isTouchDevice: isTouch });
+      }
+    };
+    window.addEventListener("resize", this.handleResizeOrTouch, false);
+    window.addEventListener(
+      "orientationchange",
+      this.handleResizeOrTouch,
+      false
+    );
+    window.addEventListener("touchstart", this.handleResizeOrTouch, {
+      passive: true,
+    });
+    if (this.checkTouchDevice()) {
+      this.setState({ isTouchDevice: true });
+    }
 
-      // replace the &nbsp;
-      const selectedText = window
+    this.clickHandler = (event) => {
+      if (!this.isInstanceActive()) {
+        window.removeEventListener("click", this.clickHandler, false);
+        return;
+      }
+      if (
+        event &&
+        event.target &&
+        event.target.closest &&
+        (event.target.closest('[role="menuitem"]') ||
+          event.target.closest(".dropdown-menu") ||
+          event.target.closest(".modal-dialog") ||
+          event.target.closest(".TouchFloatingToolbar"))
+      ) {
+        return;
+      }
+      this.handleHide();
+    };
+    window.addEventListener("click", this.clickHandler, false);
+
+    this.touchStartHandler = (event) => {
+      if (!this.isInstanceActive()) {
+        window.removeEventListener("touchstart", this.touchStartHandler, {
+          passive: true,
+        });
+        return;
+      }
+      if (
+        event &&
+        event.target &&
+        event.target.closest &&
+        (event.target.closest('[role="menuitem"]') ||
+          event.target.closest(".dropdown-menu") ||
+          event.target.closest(".modal-dialog") ||
+          event.target.closest(".TouchFloatingToolbar"))
+      ) {
+        return;
+      }
+      this.handleHide();
+    };
+    window.addEventListener("touchstart", this.touchStartHandler, {
+      passive: true,
+    });
+
+    this.keyDownHandler = (event) => {
+      if (!this.isInstanceActive()) {
+        window.removeEventListener("keydown", this.keyDownHandler, false);
+        return;
+      }
+      if (!this.state.open) {
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        this.handleHide();
+      }
+    };
+    window.addEventListener("keydown", this.keyDownHandler, false);
+  }
+
+  componentDidUpdate(prevProps) {
+    if (prevProps.app !== this.props.app) {
+      if (prevProps.app) {
+        if (prevProps.app.openContextMenu) {
+          prevProps.app.openContextMenu = null;
+        }
+        if (this._onFloatingMenuToggle) {
+          prevProps.app.off("ui:floating-menu-toggle", this._onFloatingMenuToggle);
+        }
+        if (this._onContextMenuUpdate) {
+          prevProps.app.off("term:context-menu:update", this._onContextMenuUpdate);
+        }
+      }
+      const { app } = this.props;
+      if (app) {
+        app.openContextMenu = (x, y) => {
+          if (!this.isInstanceActive()) return;
+          this.showMenuAt(x, y);
+        };
+        if (!this._onFloatingMenuToggle) {
+          this._onFloatingMenuToggle = ({ event, targetEl } = {}) => {
+            this.handleFloatingMenuToggle(event, targetEl);
+          };
+        }
+        app.on("ui:floating-menu-toggle", this._onFloatingMenuToggle);
+        if (!this._onContextMenuUpdate) {
+          this._onContextMenuUpdate = () => {
+            if (this.isInstanceActive()) {
+              this.forceUpdate();
+            }
+          };
+        }
+        app.on("term:context-menu:update", this._onContextMenuUpdate);
+      }
+    }
+  }
+
+  componentWillUnmount() {
+    this._isMounted = false;
+    const { app } = this.props;
+    if (app && app.openContextMenu) {
+      app.openContextMenu = null;
+    }
+    if (app && this._onFloatingMenuToggle) {
+      app.off("ui:floating-menu-toggle", this._onFloatingMenuToggle);
+      this._onFloatingMenuToggle = null;
+    }
+    if (app && this._onContextMenuUpdate) {
+      app.off("term:context-menu:update", this._onContextMenuUpdate);
+    }
+    window.removeEventListener("resize", this.handleResizeOrTouch, false);
+    window.removeEventListener(
+      "orientationchange",
+      this.handleResizeOrTouch,
+      false
+    );
+    window.removeEventListener("touchstart", this.handleResizeOrTouch, {
+      passive: true,
+    });
+    window.removeEventListener("keydown", this.keyDownHandler, false);
+    window.removeEventListener("touchstart", this.touchStartHandler, {
+      passive: true,
+    });
+    window.removeEventListener("click", this.clickHandler, false);
+    const termWindow = document.getElementById("TermWindow");
+    if (termWindow) {
+      termWindow.removeEventListener(
+        "contextmenu",
+        this.contextMenuHandler,
+        true
+      );
+    }
+  }
+
+  handleFloatingMenuToggle = (event, targetEl) => {
+    event?.stopPropagation?.();
+    event?.preventDefault?.();
+    if (Date.now() < (this._suppressMenuToggleUntil || 0)) {
+      return;
+    }
+    this._suppressMenuToggleUntil = Date.now() + 350;
+    if (this.state.open) {
+      this.handleHide();
+      return;
+    }
+
+    const { app } = this.props;
+    if (app.inputAreaFocusTimer) {
+      app.inputAreaFocusTimer.cancel();
+      app.inputAreaFocusTimer = null;
+    }
+    app.contextMenuShown = true;
+
+    const selColRow = app.view.getSelectionColRow();
+    app.lastSelection = selColRow || null;
+
+    let selectedText = app.view.getSelectedText();
+    if (!selectedText && !window.getSelection().isCollapsed) {
+      selectedText = window
         .getSelection()
         .toString()
         .replace(/\u00a0/g, " ");
-      const urlEnabled = !!contextOnUrl;
-      const normalEnabled = !urlEnabled && window.getSelection().isCollapsed;
-      const selEnabled = !normalEnabled;
-
-      return {
-        open,
-        pageX: event.pageX,
-        pageY: event.pageY,
-        contextOnUrl,
-        aElement,
-        selectedText,
-        urlEnabled,
-        normalEnabled,
-        selEnabled
-      };
-    },
-
-    onHide: (state, { pttchrome }) => () => {
-      if (state.open) {
-        pttchrome.contextMenuShown = false;
-        return initialState;
-      }
-    },
-
-    onMenuSelect: (state, { pttchrome }) => (eventKey, event) => {
-      menuHandlerByEventKey[eventKey](pttchrome, state);
-      event.stopPropagation();
-      pttchrome.contextMenuShown = false;
-      return initialState;
-    },
-
-    onInputHelperClick: (state, { pttchrome }) => event => {
-      event.stopPropagation();
-      pttchrome.contextMenuShown = false;
-      return {
-        ...initialState,
-        showsInputHelper: true
-      };
-    },
-
-    onLiveArticleHelperClick: (state, { pttchrome }) => event => {
-      event.stopPropagation();
-      pttchrome.contextMenuShown = false;
-      return {
-        ...initialState,
-        showsLiveArticleHelper: true
-      };
-    },
-
-    onSettingsClick: (state, { pttchrome }) => event => {
-      event.stopPropagation();
-      pttchrome.contextMenuShown = false;
-      pttchrome.onDisableLiveHelperModalState();
-      pttchrome.modalShown = true;
-      return {
-        ...initialState,
-        showsSettings: true
-      };
-    },
-
-    onQuickSearchSelect: (state, { pttchrome, selectedText }) => (
-      eventKey,
-      event
-    ) => {
-      const url = eventKey.replace("%s", selectedText);
-      window.open(url);
-      event.stopPropagation();
-      pttchrome.contextMenuShown = false;
-      return initialState;
-    },
-
-    onInputHelperHide: (state, { pttchrome }) => () => {
-      return {
-        showsInputHelper: false
-      };
-    },
-    onInputHelperReset: (state, { pttchrome }) => () => {
-      pttchrome.conn.send("\x15[m");
-    },
-    onInputHelperCmdSend: (state, { pttchrome }) => cmd => {
-      if (!window.getSelection().isCollapsed && pttchrome.buf.pageState == 6) {
-        // something selected
-        var sel = pttchrome.view.getSelectionColRow();
-        var y = pttchrome.buf.cur_y;
-        var selCmd = "";
-        // move cursor to end and send reset code
-        selCmd += "\x1b[H";
-        if (y > sel.end.row) {
-          selCmd += "\x1b[A".repeat(y - sel.end.row);
-        } else if (y < sel.end.row) {
-          selCmd += "\x1b[B".repeat(sel.end.row - y);
-        }
-        var repeats = pttchrome.buf.getRowText(sel.end.row, 0, sel.end.col)
-          .length;
-        selCmd += "\x1b[C".repeat(repeats) + "\x15[m";
-
-        // move cursor to start and send color code
-        y = sel.end.row;
-        selCmd += "\x1b[H";
-        if (y > sel.start.row) {
-          selCmd += "\x1b[A".repeat(y - sel.start.row);
-        } else if (y < sel.start.row) {
-          selCmd += "\x1b[B".repeat(sel.start.row - y);
-        }
-        repeats = pttchrome.buf.getRowText(sel.start.row, 0, sel.start.col)
-          .length;
-        selCmd += "\x1b[C".repeat(repeats);
-        cmd = selCmd + cmd;
-      }
-      pttchrome.conn.send(cmd);
-    },
-    onInputHelperConvSend: (state, { pttchrome }) => value => {
-      pttchrome.conn.convSend(value);
-    },
-
-    onLiveHelperHide: (state, { pttchrome }) => nextState => {
-      pttchrome.setAutoPushthreadUpdate(-1);
-      return {
-        showsLiveArticleHelper: false,
-        liveHelperEnabled: false
-      };
-    },
-    onLiveHelperChange: (state, { pttchrome }) => nextState => {
-      if (nextState.enabled) {
-        // cancel easy reading mode first
-        pttchrome.view.useEasyReadingMode = false;
-        pttchrome.switchToEasyReadingMode();
-        pttchrome.setAutoPushthreadUpdate(nextState.sec);
-      } else {
-        pttchrome.setAutoPushthreadUpdate(-1);
-      }
-      return {
-        liveHelperEnabled: nextState.enabled,
-        liveHelperSec: nextState.sec
-      };
-    },
-
-    onPrefSave: (state, { pttchrome }) => values => {
-      return onPrefSaveImpl(pttchrome, values);
-    },
-    onPrefReset: (state, { pttchrome }) => values => {
-      pttchrome.view.redraw(true);
-      return onPrefSaveImpl(pttchrome, values);
     }
-  }),
-  withProps(({ pttchrome, liveHelperEnabled, onLiveHelperChange }) => {
-    // FIXME: side effect
-    if (liveHelperEnabled) {
-      pttchrome.onToggleLiveHelperModalState = () => {
-        onLiveHelperChange({
-          enabled: !state.enabled,
-          sec: state.sec
-        });
+    const urlEnabled = false;
+    const normalEnabled = !selectedText;
+    const selEnabled = !!selectedText;
+
+    const target =
+      targetEl ||
+      event?.currentTarget ||
+      event?.target?.closest?.("button") ||
+      event?.target ||
+      (typeof document !== "undefined"
+        ? document.querySelector?.(
+            ".TouchFloatingToolbar [aria-label='Menu & Settings']"
+          ) ||
+          document.querySelector?.(".TouchFloatingToolbar__Btn--system") ||
+          document.querySelector?.(".TouchFloatingToolbar")
+        : null);
+
+    const rect =
+      target?.getBoundingClientRect?.() || {
+        left:
+          (typeof window !== "undefined" ? window.innerWidth : 800) - 50,
+        right:
+          (typeof window !== "undefined" ? window.innerWidth : 800) - 10,
+        top:
+          (typeof window !== "undefined" ? window.innerHeight : 600) - 50,
+        bottom:
+          (typeof window !== "undefined" ? window.innerHeight : 600) - 10,
+        width: 40,
+        height: 40,
       };
-      pttchrome.onDisableLiveHelperModalState = () => {
-        onLiveHelperChange({
-          enabled: false,
-          sec: state.sec
-        });
-      };
-    } else {
-      pttchrome.onToggleLiveHelperModalState = pttchrome.onDisableLiveHelperModalState = noop;
+
+    const pageX = Math.min(
+      rect.right,
+      (typeof window !== "undefined" ? window.innerWidth : 800) - 8
+    );
+    const pageY = rect.top - 4;
+
+    this._menuOpenedAt = Date.now();
+    this.setState({
+      open: true,
+      pageX,
+      pageY,
+      anchorRect: rect,
+      contextOnUrl: "",
+      aElement: null,
+      selectedText,
+      urlEnabled,
+      normalEnabled,
+      selEnabled,
+    });
+  };
+
+  handleContextMenu = (event) => {
+    event.stopPropagation();
+    event.preventDefault();
+    if (
+      event.pointerType === "touch" ||
+      (this.checkTouchDevice() && event.button === 0) ||
+      (this.props.app &&
+        this.props.app.touch &&
+        this.props.app.touch.lastTouchTime &&
+        Date.now() - this.props.app.touch.lastTouchTime < 1000)
+    ) {
+      return;
     }
-  }),
-  lifecycle({
-    componentDidMount() {
-      this.contextMenuHandler = event => {
-        this.props.onContextMenu(event);
-      };
-      document
-        .getElementById("BBSWindow")
-        .addEventListener("contextmenu", this.contextMenuHandler, true);
-
-      this.clickHandler = () => {
-        this.props.onHide();
-      };
-      window.addEventListener("click", this.clickHandler, false);
-
-      this.touchStartHandler = event => {
-        if (event.target.getAttribute("role") === "menuitem") {
-          return;
-        }
-        this.props.onHide();
-      };
-      window.addEventListener("touchstart", this.touchStartHandler, false);
-
-      this.hotKeyUpHandler = event => {
-        if (!this.props.open) {
-          return;
-        }
-        event.preventDefault();
-        event.stopPropagation();
-        if (event.altKey || event.ctrlKey || event.shiftKey) {
-          return;
-        }
-        const eventKey = EVENT_KEY_BY_HOT_KEY[event.keyCode];
-        if (eventKey) {
-          this.props.onMenuSelect(eventKey, event);
-        }
-      };
-      window.addEventListener("keyup", this.hotKeyUpHandler, false);
-    },
-    componentWillUnmount() {
-      window.removeEventListener("keyup", this.hotKeyUpHandler, false);
-      window.removeEventListener("touchstart", this.touchStartHandler, false);
-      window.removeEventListener("click", this.clickHandler, false);
-      document.BBSWindow.removeEventListener(
-        "keyup",
-        this.contextMenuHandler,
-        false
-      );
+    const { app } = this.props;
+    const anyModalShown = Boolean(this.state.showsSettings || app?.modalShown);
+    if (anyModalShown) {
+      return;
     }
-  })
-);
+    const rightAction = normalizeMouseButtonAction(
+      app?.rightClickAction,
+      "right"
+    );
+    if (app && rightAction !== "menu" && !event.shiftKey) {
+      if (rightAction === "paste" || app.rightClickAction === "paste") {
+        app.doPaste();
+      } else if (rightAction !== "none") {
+        app.mouse?.executeMouseButtonAction?.(rightAction, "right");
+      }
+      return;
+    }
+    this.showMenuAt(event.pageX, event.pageY, event.target);
+  };
 
-export const ContextMenu = ({
-  pttchrome,
-  //
-  pageX,
-  pageY,
-  open,
-  urlEnabled,
-  normalEnabled,
-  selEnabled,
-  selectedText,
-  onMenuSelect,
-  onInputHelperClick,
-  onLiveArticleHelperClick,
-  onSettingsClick,
-  onQuickSearchSelect,
-  //
-  showsInputHelper,
-  showsLiveArticleHelper,
-  showsSettings,
-  //
-  liveHelperEnabled,
-  liveHelperSec,
-  onInputHelperHide,
-  onInputHelperReset,
-  onInputHelperCmdSend,
-  onInputHelperConvSend,
-  onLiveHelperHide,
-  onLiveHelperChange,
-  onPrefSave,
-  onPrefReset
-}) => (
-  <React.Fragment>
-    <div
-      className={cx({
-        open
-      })}
-    >
-      <DropdownMenu
-        pageX={pageX}
-        pageY={pageY}
-        urlEnabled={urlEnabled}
-        normalEnabled={normalEnabled}
-        selEnabled={selEnabled}
-        mouseBrowsingEnabled={pttchrome.buf.useMouseBrowsing}
-        selectedText={selectedText}
-        onMenuSelect={onMenuSelect}
-        onInputHelperClick={onInputHelperClick}
-        onLiveArticleHelperClick={onLiveArticleHelperClick}
-        onSettingsClick={onSettingsClick}
-        onQuickSearchSelect={onQuickSearchSelect}
-      />
-    </div>
-    <InputHelperModal
-      show={showsInputHelper}
-      onHide={onInputHelperHide}
-      onReset={onInputHelperReset}
-      onCmdSend={onInputHelperCmdSend}
-      onConvSend={onInputHelperConvSend}
-    />
-    <LiveHelperModal
-      show={showsLiveArticleHelper}
-      onHide={onLiveHelperHide}
-      enabled={liveHelperEnabled}
-      sec={liveHelperSec}
-      onChange={onLiveHelperChange}
-    />
-    <PrefModal show={showsSettings} onSave={onPrefSave} onReset={onPrefReset} />
-  </React.Fragment>
-);
+  showMenuAt = (pageX, pageY, targetEl) => {
+    const { app } = this.props;
+    if (app.preventContextMenuOnMouseUp) {
+      app.preventContextMenuOnMouseUp = false;
+      return;
+    }
+    if (app.inputAreaFocusTimer) {
+      app.inputAreaFocusTimer.cancel();
+      app.inputAreaFocusTimer = null;
+    }
+    app.contextMenuShown = true;
+    const selColRow = app.view.getSelectionColRow();
+    app.lastSelection = selColRow || null;
 
-export default enhance(ContextMenu);
+    const aElement = targetEl && typeof targetEl.closest === "function" ? targetEl.closest("a") : null;
+    const rawHref = aElement ? aElement.getAttribute("href") || "" : "";
+    const contextOnUrl = rawHref.startsWith("#") ? "" : rawHref;
+
+    let selectedText = app.view.getSelectedText();
+    if (!selectedText && typeof window !== "undefined" && window.getSelection && !window.getSelection().isCollapsed) {
+      selectedText = window
+        .getSelection()
+        .toString()
+        .replace(/\u00a0/g, " ");
+    }
+    const urlEnabled = !!contextOnUrl;
+    const normalEnabled = !urlEnabled && !selectedText;
+    const selEnabled = Boolean(selectedText);
+
+    this._menuOpenedAt = Date.now();
+    this.setState({
+      open: true,
+      pageX,
+      pageY,
+      anchorRect: null,
+      contextOnUrl,
+      aElement,
+      selectedText,
+      urlEnabled,
+      normalEnabled,
+      selEnabled,
+    });
+  };
+
+  handleHide = () => {
+    if (this.state.open) {
+      const { app } = this.props;
+      app.contextMenuShown = false;
+      if (!app.hasActiveInputInterceptor()) {
+        app.setInputAreaFocus();
+      }
+      this.setState(initialState);
+    }
+  };
+
+  handleMenuSelect = (eventKey, event) => {
+    if (Date.now() < (this._menuOpenedAt || 0) + 350) {
+      event?.stopPropagation?.();
+      event?.preventDefault?.();
+      return;
+    }
+    const { app } = this.props;
+    menuHandlerByEventKey[eventKey]?.(app, this.state);
+    event?.stopPropagation?.();
+    app.contextMenuShown = false;
+    if (!app.hasActiveInputInterceptor()) {
+      app.setInputAreaFocus();
+    }
+    this.setState(initialState);
+  };
+
+  handleSettingsClick = (event) => {
+    event.stopPropagation();
+    const { app } = this.props;
+    app.contextMenuShown = false;
+    app.modalShown = true;
+    this.setState({
+      ...initialState,
+      showsSettings: true,
+    });
+  };
+
+  handlePrefSave = (values) => {
+    const { app } = this.props;
+    const nextState = onPrefSaveImpl(app, values);
+    this.setState(nextState, () => {
+      setTimeout(() => app?.setInputAreaFocus?.(true), 0);
+    });
+  };
+
+  handlePrefReset = (values) => {
+    const { app } = this.props;
+    app.onValuesPrefChange(values);
+  };
+
+  render() {
+    const {
+      open,
+      pageX,
+      pageY,
+      urlEnabled,
+      normalEnabled,
+      selEnabled,
+      selectedText,
+      showsSettings,
+      isTouchDevice,
+    } = this.state;
+    const { app } = this.props;
+    const anyModalShown = Boolean(showsSettings || app?.modalShown);
+
+    const registeredItems = this.getRegisteredItems();
+    const menuContext = {
+      open,
+      pageX,
+      pageY,
+      urlEnabled,
+      normalEnabled,
+      selEnabled,
+      selectedText,
+      contextOnUrl: this.state.contextOnUrl,
+      isTouchDevice,
+    };
+
+    const pluginItems = [];
+    for (const item of registeredItems) {
+      const isVisible =
+        typeof item.visible === "function"
+          ? item.visible(app, menuContext)
+          : item.visible !== undefined
+          ? Boolean(item.visible)
+          : normalEnabled;
+      if (!isVisible) continue;
+
+      const isChecked =
+        typeof item.checked === "function"
+          ? item.checked(app, menuContext)
+          : Boolean(item.checked);
+
+      const isEnabled =
+        typeof item.enabled === "function"
+          ? item.enabled(app, menuContext)
+          : item.enabled !== undefined
+          ? Boolean(item.enabled)
+          : true;
+
+      const label =
+        typeof item.label === "function"
+          ? item.label(app)
+          : item.label || item.id;
+
+      pluginItems.push({
+        id: item.id,
+        label,
+        checked: isChecked,
+        enabled: isEnabled,
+        order: item.order ?? 100,
+        onClick: (event) => {
+          if (!isEnabled) return;
+          if (event) event.stopPropagation();
+          this.handleHide();
+          if (typeof item.onClick === "function") {
+            item.onClick(app, {
+              event,
+              closeMenu: () => this.handleHide(),
+              state: this.state,
+            });
+          }
+        },
+      });
+    }
+
+    return (
+      <React.Fragment>
+        <div className={cx({ open: open && !anyModalShown })}>
+          <DropdownMenu
+            open={open}
+            pageX={pageX}
+            pageY={pageY}
+            anchorRect={this.state.anchorRect}
+            urlEnabled={urlEnabled}
+            normalEnabled={normalEnabled}
+            selEnabled={selEnabled}
+            pluginItems={pluginItems}
+            selectedText={selectedText}
+            onMenuSelect={this.handleMenuSelect}
+            onSettingsClick={this.handleSettingsClick}
+          />
+        </div>
+        <PrefModal
+          app={app}
+          show={showsSettings}
+          isTouch={isTouchDevice}
+          onSave={this.handlePrefSave}
+          onReset={this.handlePrefReset}
+        />
+      </React.Fragment>
+    );
+  }
+}
+
+export default ContextMenu;

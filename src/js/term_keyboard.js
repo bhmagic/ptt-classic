@@ -1,6 +1,6 @@
-'use strict';
+import { EventEmitter } from './event.js';
 
-const KeyMap = {
+export const KeyMap = {
   'Backspace': '\b',
   'Tab': '\t',
   'Enter': '\r',
@@ -22,13 +22,13 @@ const KeyMap = {
   'Left': '\x1b[D'
 };
 let CtrlShiftMap = {
-  '@': 50,
-  '^': 54,
-  '_': 109,
-  '?': 127,
-  '[': 219,
-  '\\': 220,
-  ']': 221
+  '@': 0,    // NUL
+  '[': 27,   // ESC
+  '\\': 28,  // FS
+  ']': 29,   // GS
+  '^': 30,   // RS
+  '_': 31,   // US
+  '?': 127   // DEL
 };
 // A -> 1
 for (let i = 97; i <= 122; i++) {
@@ -38,18 +38,36 @@ for (let i = 97; i <= 122; i++) {
 // FIXME: Under Mac, IME inputs will be sent as key of modified char.
 // Need to use key code directly.
 
-export class TermKeyboard {
-  // isLeftDB: function() -> bool
-  // isCurDB: function() -> bool
-  // send: function(data)
-  constructor(isLeftDB, isCurDB, send) {
-    this._checkLeftDB = isLeftDB;
-    this._checkCurDB = isCurDB;
+export class TermKeyboard extends EventEmitter {
+  /**
+   * @param {function(string): boolean} send
+   * @param {function(object)|EventTarget} [onKey]
+   * @param {object} [options]
+   */
+  constructor(send, onKey = null, options = {}) {
+    super();
     this._sendFunc = send;
+    this._onKey = onKey;
+    this.backspaceKey = options.backspaceKey || 'control-h';
+    this.deleteKey = options.deleteKey || 'escape-sequence';
+  }
+
+  getMappedKey(key) {
+    if (key === 'Backspace') {
+      return this.backspaceKey === 'control-?' ? '\x7f' : '\b';
+    }
+    if (key === 'Delete') {
+      if (this.deleteKey === 'control-?') return '\x7f';
+      if (this.deleteKey === 'control-h') return '\b';
+      return '\x1b[3~';
+    }
+    return KeyMap[key];
   }
 
   _send(data) {
-    this._sendFunc(data);
+    if (typeof this._sendFunc === 'function') {
+      this._sendFunc(data);
+    }
     return true;
   }
 
@@ -57,16 +75,28 @@ export class TermKeyboard {
     return this._send(String.fromCharCode(code));
   }
 
-  _checkDB(key) {
-    switch (key) {
-      case 'Backspace':
-      case 'ArrowLeft':
-        return this._checkLeftDB();
-      case 'Delete':
-      case 'ArrowRight':
-        return this._checkCurDB();
+  /**
+   * Send a specific key (e.g. navigation or character) without triggering key event listeners.
+   * @param {string} key 
+   * @returns {boolean}
+   */
+  sendKey(key) {
+    const mapped = this.getMappedKey(key);
+    if (mapped) {
+      return this._send(mapped);
+    }
+    if (typeof key === 'string' && key.length === 1) {
+      return this._send(key);
     }
     return false;
+  }
+
+  _fireKeyEvent(key, mapped, event) {
+    const detail = { key, mapped, term: this, event };
+    this.emit('term:key', { ...detail, detail });
+    if (typeof this._onKey === 'function') {
+      this._onKey(detail);
+    }
   }
 
   onKeyDown(e) {
@@ -75,8 +105,15 @@ export class TermKeyboard {
   }
 
   _onKeyDown(e) {
+    if (!e) return false;
     // Windows/Command key.
-    if (e.getModifierState('Meta')) {
+    if (e.metaKey) {
+      return false;
+    }
+
+    // Standard IME guard (Safari & Chrome): Do not process BBS mapped keys (arrows, enter, backspace)
+    // while IME composition is active in any browser.
+    if (e.isComposing || e.key === 'Process' || e.keyCode === 229) {
       return false;
     }
 
@@ -86,48 +123,59 @@ export class TermKeyboard {
         return false;
       }
 
-      let mapped = KeyMap[e.key];
+      let mapped = e.key ? this.getMappedKey(e.key) : null;
       if (mapped) {
-        if (this._checkDB(e.key)) {
-          return this._send(mapped + mapped);
-        } else {
-          return this._send(mapped);
+        const sent = this._send(mapped);
+        this._fireKeyEvent(e.key, mapped, e);
+        return sent;
+      } else if (e.key && e.key.length == 1) {
+        // Never intercept Bopomofo phonetic symbols / tone marks on keydown (Zhuyin pre-edit)
+        if (/[\u3100-\u312F\u31A0-\u31BF\u02C7\u02CA\u02CB\u02D9]/.test(e.key)) {
+          return false;
         }
-      } else if (e.key.length == 1) {
-        // Normal char is handled in keypress. See comment in onKeyPress.
+        // When a native input element is focused and receiving events directly,
+        // do not call preventDefault() on printable character keydowns so that
+        // browser/OS native input and IME composition can process the keystroke
+        // uncancelled via the 'input' and 'composition*' events.
+        if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable)) {
+          return false;
+        }
+        if (!e.isComposing && e.key !== 'Process' && e.keyCode !== 229) {
+          const sent = this._send(e.key);
+          this._fireKeyEvent(e.key, e.key, e);
+          return sent;
+        }
         return false;
       }
     } else if (e.ctrlKey && !e.altKey && !e.shiftKey) {
+      if (!e.key) return false;
       // Use lowercase no even capslock's on.
       let key = e.key.length == 1 ? e.key.toLowerCase() : e.key;
       let mappedCode = CtrlShiftMap[key];
-      if (mappedCode) {
-        return this._sendCharCode(mappedCode);
+      if (mappedCode !== undefined) {
+        const sent = this._sendCharCode(mappedCode);
+        this._fireKeyEvent(e.key, String.fromCharCode(mappedCode), e);
+        return sent;
       }
     } else if (!e.ctrlKey && e.altKey && !e.shiftKey) {
+      if (!e.key) return false;
       // Remapped keys, which conflict browser shortcuts.
       // Use lowercase no even capslock's on.
       switch (e.key.toLowerCase()) {
         case 'r':
         case 't':
         case 'w':
-        case 'a':
+        case 'a': {
           // Ctrl+key
-          return this._sendCharCode(e.key.toUpperCase().charCodeAt(0) - 64);
+          const code = e.key.toUpperCase().charCodeAt(0) - 64;
+          const sent = this._sendCharCode(code);
+          this._fireKeyEvent(e.key, String.fromCharCode(code), e);
+          return sent;
+        }
       }
     }
     return false;
   }
 
-  onKeyPress(e) {
-    // Firefox on Mac issues keyCode for the key that starts composition (while
-    // other browsers send 229), so a normal char is handled using keypress. We
-    // can't move all key handling here since ctrl- and alt-compounds are
-    // handled by browsers before keypress.
-    if (!e.ctrlKey && !e.altKey && e.key.length == 1) {
-      e.preventDefault();
-      return this._send(e.key)
-    }
-    return false;
-  }
+
 }

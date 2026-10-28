@@ -7,9 +7,9 @@ export const Row = ({
   forceWidth,
   highlighted,
   onHyperLinkMouseOver,
-  onHyperLinkMouseOut
+  onHyperLinkMouseOut,
 }) => (
-  <span type="bbsrow" srow={row}>
+  <span type="termrow" srow={row}>
     {chars
       .reduce(
         LinkSegmentBuilder.accumulator,
@@ -26,4 +26,5 @@ export const Row = ({
   </span>
 );
 
+export { DOMScreen } from "./DOMScreen";
 export default Row;

@@ -1,4 +1,19 @@
 import assert from 'node:assert/strict';
+import { u2b } from '../../src/js/string_util.js';
+
+export function articleFrame(links, title = 'Media preview fixture') {
+  const text = `\x1b[2J\x1b[H${title}\r\n${links.join('\r\n')}\r\n`
+    + '\x1b[24;1H\x1b[37;44m  瀏覽 第 1/1 頁 (100%)  目前顯示: 第 1~23 行\x1b[0m\x1b[24;80H';
+  return u2b(text);
+}
+
+async function assertBorderless(locator) {
+  const style = await locator.evaluate(element => {
+    const style = getComputedStyle(element);
+    return { border: style.borderTopWidth, padding: style.paddingTop, background: style.backgroundColor };
+  });
+  assert.deepEqual(style, { border: '0px', padding: '0px', background: 'rgba(0, 0, 0, 0)' });
+}
 
 export async function exerciseMedia(page, send, results) {
   const imageRequests = [];
@@ -18,92 +33,83 @@ export async function exerciseMedia(page, send, results) {
       images: [{ link: 'https://i.imgur.com/album-first.jpg' }, { link: 'https://i.imgur.com/album-motion.gif' }]
     } : { type: 'image/png', link: 'https://i.imgur.com/resolved-image.png' } } });
   });
-  await page.route(/^https:\/\/(www\.youtube\.com|clips\.twitch\.tv)\//, route =>
+  await page.route('https://www.youtube.com/**', route =>
     route.fulfill({ contentType: 'text/html', body: '<p>Embedded player fixture</p>' }));
 
-  send('\x1b[2J\x1b[Hhttps://i.imgur.com/fixture.jpg\r\nhttps://meee.com.tw/fixture\r\nhttps://imgur.com/a/album123\r\nhttps://imgur.com/unknown123\r\nhttps://i.verb.tw/fixture.jpg\r\n');
-  const container = page.locator('#mainContainer');
-  await page.locator('[data-ptt-media-preview-container]').waitFor();
-  const preview = page.locator('img[data-ptt-media-preview-fallback]');
-  for (const [href, expected] of [
+  const links = [
     ['https://i.imgur.com/fixture.jpg', 'https://i.imgur.com/fixture.jpg'],
     ['https://meee.com.tw/fixture', 'https://i.meee.com.tw/fixture.png'],
     ['https://imgur.com/a/album123', 'https://i.imgur.com/album-first.jpg'],
     ['https://imgur.com/unknown123', 'https://i.imgur.com/resolved-image.png'],
-    ['https://i.verb.tw/fixture.jpg', 'https://i.verb.tw/fixture.jpg']
-  ]) {
-    await container.locator(`a[href="${href}"]`).hover();
-    await page.waitForFunction(src => {
-      const img = document.querySelector('img[data-ptt-media-preview-fallback]');
-      return img?.src === src && img.complete && img.naturalWidth > 0;
-    }, expected);
-    await page.waitForFunction(() => {
-      const box = document.querySelector('img[data-ptt-media-preview-fallback]')?.getBoundingClientRect();
-      return box && box.x >= 0 && box.y >= 0 && box.right <= innerWidth + 1 && box.bottom <= innerHeight + 1;
-    });
-    const bounds = await preview.boundingBox();
-    const viewport = page.viewportSize();
-    assert.ok(bounds.x >= 0 && bounds.y >= 0 && bounds.x + bounds.width <= viewport.width + 1 && bounds.y + bounds.height <= viewport.height + 1);
-    assert.equal(await preview.evaluate(img => getComputedStyle(img).pointerEvents), 'none');
-    assert.equal(await container.locator(':scope > img:visible').count(), 1, 'Only the enhanced preview is visible');
-    await page.mouse.move(10, 10);
+    ['https://i.verb.tw/fixture.jpg', 'https://i.verb.tw/fixture.jpg'],
+  ];
+  const container = page.locator('#mainContainer');
+  const preview = page.locator('.image-preview-loaded img');
+  for (const useCanvasEngine of [true, false]) {
+    await page.evaluate(useCanvasEngine => window.app.onValuesPrefChange({ ...window.app.prefValues, useCanvasEngine }), useCanvasEngine);
+    send(`\x1b[2J\x1b[H${links.map(([href]) => href).join('\r\n')}\r\n`);
+    for (const [href, expected] of links) {
+      await container.locator(`a[href="${href}"]`).hover();
+      await page.waitForFunction(src => {
+        const img = document.querySelector('.image-preview-loaded img');
+        return img?.src === src && img.complete && img.naturalWidth > 0;
+      }, expected);
+      const bounds = await preview.boundingBox();
+      const viewport = page.viewportSize();
+      assert.ok(bounds.x >= 0 && bounds.y >= 0 && bounds.x + bounds.width <= viewport.width + 1 && bounds.y + bounds.height <= viewport.height + 1);
+      await assertBorderless(preview);
+      await assertBorderless(page.locator('.image-preview-loaded'));
+      assert.equal(await preview.evaluate(img => getComputedStyle(img).pointerEvents), 'none');
+      assert.equal(await page.locator('.image-preview-loaded').count(), 1);
+      await page.mouse.move(10, 10);
+      await preview.waitFor({ state: 'detached' });
+    }
+    await container.locator('a[href="https://i.imgur.com/fixture.jpg"]').hover();
+    await preview.waitFor();
+    await page.screenshot({ path: `${results}/media-hover-${useCanvasEngine ? 'canvas' : 'dom'}.png` });
+    send('\x1b[2J\x1b[HAnother article\r\n');
     await preview.waitFor({ state: 'detached' });
   }
   assert.ok(imageRequests.includes('https://i.meee.com.tw/fixture.jpg'));
   assert.ok(imageRequests.includes('https://i.meee.com.tw/fixture.png'));
-  assert.ok(!imageRequests.includes('https://i.imgur.com/a/album123.jpg'), 'The native hover loader must not issue duplicate requests');
+  assert.ok(!imageRequests.includes('https://i.imgur.com/a/album123.jpg'));
 
-  await container.locator('a[href="https://i.imgur.com/fixture.jpg"]').hover();
-  await preview.waitFor();
-  await page.screenshot({ path: `${results}/media-hover.png` });
-  send('\x1b[2J\x1b[HAnother article\r\n');
-  await preview.waitFor({ state: 'detached' });
-
-  await page.locator('#BBSWindow').click({ button: 'right', position: { x: 100, y: 160 } });
-  await page.getByRole('menuitem', { name: '設定', exact: true }).click();
-  await page.locator('.PrefModal input[name="enableEasyReading"]').check();
-  await page.locator('.PrefModal .close:visible').click();
-  await page.locator('.PrefModal').waitFor({ state: 'detached' });
-
-  // This is the classic renderer's link-wrapper/preview-container DOM contract.
-  await container.evaluate(main => {
-    main.replaceChildren();
-    const marker = document.createElement('span');
-    marker.className = 'q4 b7';
-    marker.textContent = 'Article fixture';
-    main.append(marker);
-    for (const [id, href] of [
-      ['image', 'https://i.imgur.com/inline.jpg'],
-      ['verb', 'https://i.verb.tw/inline.jpg'],
-      ['album', 'https://imgur.com/a/album123'],
-      ['youtube', 'https://youtu.be/M7lc1UVf-VE?t=45'],
-      ['twitch', 'https://clips.twitch.tv/IncredulousAbstemiousFennelImGlitch']
-    ]) {
-      const wrapper = document.createElement('span');
-      const link = document.createElement('a');
-      link.href = href;
-      link.textContent = href;
-      wrapper.append(link);
-      const target = document.createElement('div');
-      target.dataset.testPreview = id;
-      main.append(wrapper, target);
-    }
-  });
-  await page.locator('[data-test-preview="image"] img').waitFor();
-  await page.waitForFunction(() => {
-    const image = document.querySelector('[data-test-preview="verb"] img');
-    return image?.complete && image.naturalWidth > 0;
-  });
-  await page.locator('[data-test-preview="album"] video').waitFor();
-  assert.equal(await page.locator('[data-test-preview="album"] img').count(), 1);
-  const youtube = page.locator('[data-test-preview="youtube"] iframe');
-  await youtube.waitFor({ state: 'attached' });
+  await page.evaluate(() => window.app.onValuesPrefChange({ ...window.app.prefValues, useCanvasEngine: true, enableEasyReading: true }));
+  const inlineLinks = [
+    'https://i.imgur.com/inline.jpg',
+    'https://i.verb.tw/inline.jpg',
+    'https://imgur.com/a/album123',
+    'https://youtu.be/M7lc1UVf-VE?t=45',
+    'https://clips.twitch.tv/IncredulousAbstemiousFennelImGlitch',
+  ];
+  // Feed a real Big5/ANSI article through the socket, parser and Easy Reading.
+  send(articleFrame(inlineLinks));
+  await page.locator('#easyReadingOverlay').waitFor({ state: 'visible' });
+  for (const href of inlineLinks.slice(0, 2)) {
+    const target = page.locator(`[data-media-href="${href}"]`);
+    await target.scrollIntoViewIfNeeded();
+    await page.waitForFunction(href => {
+      const img = document.querySelector(`[data-media-href="${href}"] img`);
+      return img?.complete && img.naturalWidth > 0;
+    }, href);
+    await assertBorderless(target.locator('img'));
+  }
+  const album = page.locator('[data-media-href="https://imgur.com/a/album123"]');
+  await album.scrollIntoViewIfNeeded();
+  await album.locator('video').waitFor();
+  assert.equal(await album.locator('img').count(), 1);
+  const youtube = page.locator('[data-media-href="https://youtu.be/M7lc1UVf-VE?t=45"] iframe');
+  await youtube.scrollIntoViewIfNeeded();
   assert.match(await youtube.getAttribute('src'), /\/embed\/M7lc1UVf-VE\?start=45$/);
-  const twitch = page.locator('[data-test-preview="twitch"] a');
-  await twitch.waitFor({ state: 'attached' });
-  assert.match(await twitch.getAttribute('href'), /clips\.twitch\.tv\/IncredulousAbstemiousFennelImGlitch/);
-  assert.equal(await twitch.getAttribute('target'), '_blank');
-  assert.equal(await page.locator('[data-test-preview="twitch"] iframe').count(), 0);
   assert.equal(await youtube.getAttribute('loading'), 'lazy');
-  return { imageHover: true, verbHover: true, verbInline: true, meeeFallback: true, imgurAlbum: true, imgurUnknown: true, stalePreviewCleanup: true, inlineImage: true, albumVideo: true, youtubeElement: true, twitchLink: true };
+  const twitch = page.locator('[data-media-href^="https://clips.twitch.tv/"]');
+  await twitch.scrollIntoViewIfNeeded();
+  await twitch.locator('a').waitFor();
+  assert.equal(await twitch.locator('a').getAttribute('target'), '_blank');
+  assert.equal(await twitch.locator('iframe').count(), 0);
+  await page.locator('[data-media-href="https://i.verb.tw/inline.jpg"]').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `${results}/media-inline.png` });
+  return { canvasHover: true, domHover: true, verbHover: true, verbInline: true, meeeFallback: true,
+    imgurAlbum: true, imgurUnknown: true, stalePreviewCleanup: true, realArticleInline: true,
+    albumVideo: true, youtubeElement: true, twitchLink: true, borderlessImages: true };
 }

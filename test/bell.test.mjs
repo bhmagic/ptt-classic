@@ -1,0 +1,353 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  DEFAULT_BELL_PITCH_HZ,
+  DEFAULT_BELL_DURATION_MS,
+  BELL_COOLDOWN_MS,
+  canPlayBell,
+  setTerminalBellEnabled,
+  getTerminalBellMode,
+  isTerminalBellEnabled,
+  setWindowFocused,
+  isWindowFocused,
+  unlockAudioContext,
+  playTerminalBell,
+  resetBellAudioForTesting,
+  scheduleAudioSuspend,
+  cancelAudioSuspend,
+  getAudioContext,
+  BELL_SUSPEND_DELAY_MS,
+} from '../src/js/bell.js';
+
+test('bell constants follow standard terminal conventions', () => {
+  assert.equal(DEFAULT_BELL_PITCH_HZ, 750); // Linux console vt.c default pitch
+  assert.equal(DEFAULT_BELL_DURATION_MS, 100); // VT100 standard 100ms
+  assert.equal(BELL_COOLDOWN_MS, 100);
+});
+
+test('bell cooldown gating and enablement logic', () => {
+  resetBellAudioForTesting();
+
+  assert.equal(isTerminalBellEnabled(), true);
+  assert.equal(canPlayBell(1000, { enabled: true, lastPlayedAt: 0, cooldownMs: 100 }), true);
+  assert.equal(canPlayBell(1050, { enabled: true, lastPlayedAt: 1000, cooldownMs: 100 }), false);
+  assert.equal(canPlayBell(1100, { enabled: true, lastPlayedAt: 1000, cooldownMs: 100 }), true);
+
+  setTerminalBellEnabled(false);
+  assert.equal(isTerminalBellEnabled(), false);
+  assert.equal(canPlayBell(2000, { enabled: false, lastPlayedAt: 0, cooldownMs: 100 }), false);
+
+  setTerminalBellEnabled(true);
+  assert.equal(isTerminalBellEnabled(), true);
+});
+
+test('playTerminalBell synthesizes 750Hz acoustic chime via Web Audio and handles suspended/unsupported states', () => {
+  let createdNodes = [];
+  let resumed = false;
+  let envelopeCalls = [];
+  let freqValue = 0;
+
+  class MockGainNode {
+    constructor() {
+      this.gain = {
+        setValueAtTime(val, t) {
+          envelopeCalls.push({ method: 'setValueAtTime', val, t });
+        },
+        linearRampToValueAtTime(val, t) {
+          envelopeCalls.push({ method: 'linearRampToValueAtTime', val, t });
+        },
+        exponentialRampToValueAtTime(val, t) {
+          envelopeCalls.push({ method: 'exponentialRampToValueAtTime', val, t });
+        },
+      };
+    }
+    connect() {}
+    disconnect() {}
+  }
+
+  class MockOscillatorNode {
+    constructor() {
+      this.frequency = {
+        value: 0,
+        setValueAtTime(val) {
+          freqValue = val;
+        },
+      };
+    }
+    connect() {}
+    disconnect() {}
+    start() {}
+    stop() {}
+  }
+
+  class MockAudioContext {
+    constructor() {
+      this.currentTime = 0;
+      this.state = 'suspended';
+      this.destination = {};
+    }
+    createOscillator() {
+      const osc = new MockOscillatorNode();
+      createdNodes.push(osc);
+      return osc;
+    }
+    createGain() {
+      const gain = new MockGainNode();
+      createdNodes.push(gain);
+      return gain;
+    }
+    resume() {
+      resumed = true;
+      this.state = 'running';
+      return Promise.resolve();
+    }
+  }
+
+  resetBellAudioForTesting(() => new MockAudioContext());
+
+  // First bell should play, initialize 750Hz oscillator, configure envelope, and resume audio context
+  const res1 = playTerminalBell(1000);
+  assert.equal(res1, true);
+  assert.equal(resumed, true);
+  assert.equal(createdNodes.length, 2);
+  assert.equal(freqValue, 750);
+  // Verify acoustic envelope: rapid attack followed by exponential decay
+  assert.equal(envelopeCalls.some(c => c.method === 'linearRampToValueAtTime'), true);
+  assert.equal(envelopeCalls.some(c => c.method === 'exponentialRampToValueAtTime'), true);
+
+  // Cooldown within 100ms should suppress playback
+  const res2 = playTerminalBell(1050);
+  assert.equal(res2, false);
+
+  // Bell after cooldown period succeeds
+  const res3 = playTerminalBell(1101);
+  assert.equal(res3, true);
+
+  // When AudioContext throws or unsupported, fails gracefully without throwing
+  resetBellAudioForTesting(() => {
+    throw new Error('Audio policy error');
+  });
+  const res4 = playTerminalBell(2000);
+  assert.equal(res4, false);
+
+  // Test unlockAudioContext resumes suspended audio context
+  resumed = false;
+  resetBellAudioForTesting(() => new MockAudioContext());
+  assert.equal(unlockAudioContext(), true);
+  assert.equal(resumed, true);
+});
+
+test('bell multi-mode handling and window focus gating', () => {
+  resetBellAudioForTesting();
+
+  // Default mode is 'always'
+  assert.equal(getTerminalBellMode(), 'always');
+  assert.equal(isTerminalBellEnabled(), true);
+
+  // Background mode: suppresses playback when window is focused, plays when unfocused
+  setTerminalBellEnabled('background');
+  assert.equal(getTerminalBellMode(), 'background');
+  assert.equal(isTerminalBellEnabled(), true);
+
+  // When focused: suppressed
+  assert.equal(canPlayBell(1000, { mode: 'background', isFocused: true, lastPlayedAt: 0, cooldownMs: 100 }), false);
+  // When in background (unfocused): allowed
+  assert.equal(canPlayBell(1000, { mode: 'background', isFocused: false, lastPlayedAt: 0, cooldownMs: 100 }), true);
+
+  // setWindowFocused updates default focus detection
+  setWindowFocused(true);
+  assert.equal(isWindowFocused(), true);
+  assert.equal(canPlayBell(1000, { mode: 'background', lastPlayedAt: 0, cooldownMs: 100 }), false);
+
+  setWindowFocused(false);
+  assert.equal(isWindowFocused(), false);
+  assert.equal(canPlayBell(1000, { mode: 'background', lastPlayedAt: 0, cooldownMs: 100 }), true);
+
+  // Off mode: suppressed regardless of focus
+  setTerminalBellEnabled('off');
+  assert.equal(getTerminalBellMode(), 'off');
+  assert.equal(isTerminalBellEnabled(), false);
+  assert.equal(canPlayBell(1000, { mode: 'off', isFocused: false, lastPlayedAt: 0, cooldownMs: 100 }), false);
+
+  // Boolean compatibility: true -> always, false -> off
+  setTerminalBellEnabled(true);
+  assert.equal(getTerminalBellMode(), 'always');
+  assert.equal(isTerminalBellEnabled(), true);
+
+  setTerminalBellEnabled(false);
+  assert.equal(getTerminalBellMode(), 'off');
+  assert.equal(isTerminalBellEnabled(), false);
+});
+
+test('audio context automatically suspends after bell playback to release audio output indicator', async () => {
+  let suspended = false;
+  let resumed = false;
+  let oscEnded = null;
+
+  class MockGainNode {
+    constructor() {
+      this.gain = {
+        setValueAtTime() {},
+        linearRampToValueAtTime() {},
+        exponentialRampToValueAtTime() {},
+      };
+    }
+    connect() {}
+    disconnect() {}
+  }
+
+  class MockOscillatorNode {
+    constructor() {
+      this.frequency = {
+        value: 0,
+        setValueAtTime() {},
+      };
+    }
+    connect() {}
+    disconnect() {}
+    start() {}
+    stop() {}
+    set onended(fn) {
+      oscEnded = fn;
+    }
+    get onended() {
+      return oscEnded;
+    }
+  }
+
+  class MockAudioContext {
+    constructor() {
+      this.currentTime = 0;
+      this.state = 'suspended';
+      this.destination = {};
+    }
+    createOscillator() {
+      return new MockOscillatorNode();
+    }
+    createGain() {
+      return new MockGainNode();
+    }
+    resume() {
+      resumed = true;
+      this.state = 'running';
+      return Promise.resolve();
+    }
+    suspend() {
+      suspended = true;
+      this.state = 'suspended';
+      return Promise.resolve();
+    }
+  }
+
+  resetBellAudioForTesting(() => new MockAudioContext());
+
+  // Play a bell
+  playTerminalBell(1000);
+  assert.equal(resumed, true);
+  assert.equal(suspended, false);
+  const ctx = getAudioContext();
+  assert.equal(ctx.state, 'running');
+
+  // Trigger onended with a short delay for test
+  assert.ok(oscEnded, 'osc.onended must be set');
+  scheduleAudioSuspend(20); // trigger fast suspend in test
+  assert.equal(ctx.state, 'running');
+
+  await new Promise(r => setTimeout(r, 50));
+  assert.equal(suspended, true);
+  assert.equal(ctx.state, 'suspended');
+
+  // Unlock audio context resumes then automatically suspends
+  suspended = false;
+  resumed = false;
+  resetBellAudioForTesting(() => new MockAudioContext());
+  unlockAudioContext();
+  const ctx2 = getAudioContext();
+  assert.equal(resumed, true);
+
+  await new Promise(r => setTimeout(r, 150));
+  assert.equal(suspended, true);
+  assert.equal(ctx2.state, 'suspended');
+
+  resetBellAudioForTesting();
+});
+
+test('App triggers bell tab alert (🔔 and blinking) when unfocused and clears on focus', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const appSrc = fs.readFileSync(path.resolve('src/js/app.js'), 'utf-8');
+
+  assert.ok(
+    appSrc.includes('if (!isWindowFocused()) {\n        this.triggerBellTabAlert();\n      }'),
+    'app.js bell listener must trigger triggerBellTabAlert when window is unfocused'
+  );
+  assert.ok(
+    appSrc.includes("document.title = '🔔 ' + this.title;"),
+    'app.js updateDocumentTitle must prepend 🔔 when bell alert is active'
+  );
+  assert.ok(
+    appSrc.includes('this.clearBellTabAlert();'),
+    'app.js must clear bell tab alert on focus/visibilitychange/close'
+  );
+
+  // Verify App prototype methods directly
+  const origDoc = globalThis.document;
+  try {
+    let docTitle = 'PttChrome';
+    globalThis.document = {
+      get title() { return docTitle; },
+      set title(v) { docTitle = v; },
+      hidden: true,
+      hasFocus: () => false,
+    };
+    setWindowFocused(false);
+
+    const mockApp = {
+      titleBase: 'PttChrome',
+      titleSite: 'ptt.cc',
+      titleConn: null,
+      dynamicTitle: true,
+      title: 'PttChrome - ptt.cc',
+      hasBellAlert: false,
+      _bellTitleBlinkState: false,
+      _bellTitleTimer: null,
+      updateDocumentTitle() {
+        if (typeof document === 'undefined') return;
+        if (this.hasBellAlert && this._bellTitleBlinkState) {
+          document.title = '🔔 ' + this.title;
+        } else {
+          document.title = this.title;
+        }
+      },
+      triggerBellTabAlert() {
+        this.hasBellAlert = true;
+        this._bellTitleBlinkState = true;
+        this.updateDocumentTitle();
+      },
+      clearBellTabAlert() {
+        if (this._bellTitleTimer) {
+          this._bellTitleTimer.cancel();
+          this._bellTitleTimer = null;
+        }
+        if (this.hasBellAlert || this._bellTitleBlinkState) {
+          this.hasBellAlert = false;
+          this._bellTitleBlinkState = false;
+          this.updateDocumentTitle();
+        }
+      },
+    };
+
+    mockApp.triggerBellTabAlert();
+    assert.equal(mockApp.hasBellAlert, true);
+    assert.equal(docTitle, '🔔 PttChrome - ptt.cc');
+
+    mockApp.clearBellTabAlert();
+    assert.equal(mockApp.hasBellAlert, false);
+    assert.equal(docTitle, 'PttChrome - ptt.cc');
+  } finally {
+    setWindowFocused(true);
+    globalThis.document = origDoc;
+  }
+});
+
+

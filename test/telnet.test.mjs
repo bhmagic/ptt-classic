@@ -1,0 +1,157 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { IAC, WILL, WONT, DO, DONT, ECHO, TelnetConnection, TelnetFilter } from '../src/js/telnet.js';
+import { initUAO } from '../src/conv/uao.js';
+
+initUAO();
+
+class MockSocket {
+  constructor() {
+    this.listeners = {};
+    this.sent = [];
+  }
+  on(type, fn) {
+    this.listeners[type] = this.listeners[type] || [];
+    this.listeners[type].push(fn);
+  }
+  addEventListener(type, fn) {
+    this.on(type, fn);
+  }
+  emit(type, detail) {
+    const fns = this.listeners[type] || [];
+    for (const fn of fns) {
+      fn(detail);
+    }
+  }
+  send(data) {
+    this.sent.push(data);
+  }
+}
+
+test('Telnet constants have standard RFC 854 values', () => {
+  assert.equal(IAC, 0xff);
+  assert.equal(WILL, 0xfb);
+  assert.equal(WONT, 0xfc);
+  assert.equal(DO, 0xfd);
+  assert.equal(DONT, 0xfe);
+  assert.equal(ECHO, 0x01);
+});
+
+test('TelnetConnection parses stream and dispatches pure data', () => {
+  const socket = new MockSocket();
+  const conn = new TelnetConnection(socket);
+  const received = [];
+
+  conn.addEventListener('data', (e) => {
+    assert.ok(e.data instanceof Uint8Array);
+    received.push(e.data);
+  });
+
+  // Plain data
+  socket.emit('data', { data: new TextEncoder().encode('Hello World') });
+  assert.equal(new TextDecoder().decode(received[0]), 'Hello World');
+
+  // Telnet negotiation IAC DO ECHO -> should respond IAC WONT ECHO and not leak into data
+  socket.emit('data', { data: new Uint8Array([IAC, DO, ECHO, 0x4d, 0x6f, 0x72, 0x65, 0x20, 0x54, 0x65, 0x78, 0x74]) });
+  assert.equal(new TextDecoder().decode(received[1]), 'More Text');
+  assert.ok(socket.sent.length > 0);
+  assert.deepEqual(socket.sent[0], new Uint8Array([IAC, WONT, ECHO]));
+});
+
+test('TelnetConnection escapes outgoing IAC in send() and convSend()', () => {
+  const socket = new MockSocket();
+  const conn = new TelnetConnection(socket);
+
+  // Normal send without IAC
+  conn.send('Normal');
+  assert.equal(socket.sent[0], 'Normal');
+
+  // send() containing single IAC (\xff) must be doubled to \xff\xff
+  conn.send('Prefix\xffSuffix');
+  assert.equal(socket.sent[1], 'Prefix\xff\xffSuffix');
+
+  // convSend() with UAO character mapping to byte 0xFF (\uF8F8 -> 0x00 0xFF)
+  // or any character whose Big5 code has 0xFF must escape 0xFF to 0xFF 0xFF
+  conn.convSend('\uF8F8');
+  assert.equal(socket.sent[2], '\x00\xff\xff');
+
+  // send() with Uint8Array containing 0xFF byte
+  conn.send(new Uint8Array([0x01, 0xff, 0x02]));
+  assert.deepEqual(socket.sent[3], new Uint8Array([0x01, 0xff, 0xff, 0x02]));
+});
+
+test('TelnetConnection convSend encodes via UTF-8 when site isUtf8 is true', () => {
+  const socket = new MockSocket();
+  const site = { isUtf8: true };
+  const conn = new TelnetConnection(socket, site);
+
+  assert.equal(conn.isUtf8, true);
+
+  // convSend with UTF-8 string encodes to Uint8Array
+  conn.convSend('測試');
+  const expectedBytes = new TextEncoder().encode('測試');
+  assert.deepEqual(socket.sent[0], expectedBytes);
+
+  conn.convSend('ABC');
+  assert.deepEqual(socket.sent[1], new Uint8Array([0x41, 0x42, 0x43]));
+});
+
+test('TelnetFilter and TelnetConnection emit telopt with { cmd, opt } payload', () => {
+  const socket = new MockSocket();
+  const conn = new TelnetConnection(socket);
+  const telopts = [];
+
+  conn.addEventListener('telopt', (e) => {
+    telopts.push(e);
+  });
+
+  // IAC WILL ECHO (0xFF 0xFB 0x01)
+  socket.emit('data', { data: new Uint8Array([IAC, WILL, ECHO]) });
+
+  assert.equal(telopts.length, 1);
+  const ev = telopts[0];
+  assert.equal(ev.cmd, 'WILL');
+  assert.equal(ev.opt, ECHO);
+});
+
+test('TelnetFilter inbound on Stream notifies stream telopt listener', () => {
+  const filter = new TelnetFilter();
+  const events = [];
+
+  const mockStream = {
+    emit(type, payload) {
+      if (type === 'telopt') {
+        events.push(payload);
+      }
+    },
+    sendRaw() {}
+  };
+
+  // Feed IAC DO BINARY (0xFF 0xFD 0x00)
+  filter.inbound(new Uint8Array([IAC, DO, 0x00]), mockStream);
+
+  assert.equal(events.length, 1);
+  const payload = events[0];
+  assert.equal(payload.cmd, 'DO');
+  assert.equal(payload.opt, 0);
+});
+
+test('TelnetConnection sendTimingMark sends IAC DO TIMING_MARK and silently absorbs WILL/WONT TIMING_MARK', () => {
+  const socket = new MockSocket();
+  const conn = new TelnetConnection(socket);
+  const received = [];
+  conn.addEventListener('data', (e) => received.push(e.data));
+
+  conn.sendTimingMark();
+  assert.deepEqual(socket.sent[0], new Uint8Array([IAC, DO, 0x06]));
+
+  // Server responds with IAC WONT TIMING_MARK (pttbbs default) or IAC WILL TIMING_MARK (RFC 860)
+  socket.emit('data', { data: new Uint8Array([IAC, WONT, 0x06, IAC, WILL, 0x06]) });
+  // Neither should leak into terminal data or trigger an extra IAC DONT reply
+  assert.equal(received.length, 0);
+  assert.equal(socket.sent.length, 1);
+});
+
+
+
+

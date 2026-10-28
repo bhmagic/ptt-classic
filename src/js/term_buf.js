@@ -1,275 +1,355 @@
 // Terminal Screen Buffer, displayed by TermView
 
-import { Event } from './event';
-import { ColorState } from './term_ui';
-import { u2b, b2u, parseStatusRow, parseListRow } from './string_util';
+import { EventEmitter } from './event.js';
+import { ColorState, termColors, termInvColors, termDefaultBg, termDefaultFg, termDefaultLink, getContrastColor } from './color_schemes.js';
+import { getSite } from './sites/index.js';
+import { isFullWidth } from './wcwidth.js';
+import { Locator } from './locator.js';
 
-export const termColors = [
-  // dark
-  '#000000', // black
-  '#800000', // red
-  '#008000', // green
-  '#808000', // yellow
-  '#000080', // blue
-  '#800080', // magenta
-  '#008080', // cyan
-  '#c0c0c0', // light gray
-  // bright
-  '#808080', // gray
-  '#ff0000', // red
-  '#00ff00', // green
-  '#ffff00', // yellow
-  '#0000ff', // blue
-  '#ff00ff', // magenta
-  '#00ffff', // cyan
-  '#ffffff'  // white
-];
+export { ColorState, termColors, termInvColors, termDefaultBg, termDefaultFg, termDefaultLink, getContrastColor };
 
-export const termInvColors = [
-  // dark
-  '#FFFFFF', // black
-  '#7FFFFF', // red
-  '#FF7FFF', // green
-  '#7F7FFF', // yellow
-  '#FFFF7F', // blue
-  '#7FFF7F', // magenta
-  '#FF7F7F', // cyan
-  '#3F3F3F', // light gray
-  // bright
-  '#7F7F7F', // gray
-  '#00FFFF', // red
-  '#FF00FF', // green
-  '#0000FF', // yellow
-  '#FFFF00', // blue
-  '#00FF00', // magenta
-  '#FF0000', // cyan
-  '#000000'  // white
-];
+export class TermChar {
+  static defaultFg = 7;
+  static defaultBg = 0;
 
-const mouseCursorMap = [
-  'auto',                                                // 0
-  `url(${require('../cursor/back.png')}) 0 6,auto`,      // 1
-  `url(${require('../cursor/pageup.png')}) 6 0,auto`,    // 2
-  `url(${require('../cursor/pagedown.png')}) 6 21,auto`, // 3
-  `url(${require('../cursor/home.png')}) 0 0,auto`,      // 4
-  `url(${require('../cursor/end.png')}) 0 0,auto`,       // 5
-  'pointer',                                             // 6
-  'default',                                             // 7
-  `url(${require('../cursor/prevous.png')}) 6 0,auto`,   // 8
-  `url(${require('../cursor/next.png')}) 6 0,auto`,      // 9
-  `url(${require('../cursor/first.png')}) 0 0,auto`,     // 10
-  'auto',                                                // 11
-  `url(${require('../cursor/refresh.png')}) 0 0,auto`,   // 12
-  `url(${require('../cursor/last.png')}) 0 0,auto`,      // 13
-  `url(${require('../cursor/last.png')}) 0 0,auto`       // 14
-];
+  /**
+   * @param {string} [ch]
+   */
+  constructor(ch) {
+    /** @type {string} */
+    this.ch = typeof ch === 'string' ? ch : ' ';
+    this.resetAttr();
+    /** @type {boolean} */
+    this.needUpdate = false;
+    /** @type {boolean} */
+    this.isDBCSLead = false;
+    /** @type {boolean} */
+    this.isDBCSTrail = false;
+    /** @type {boolean} */
+    this.startOfURL = false;
+    /** @type {boolean} */
+    this.endOfURL = false;
+    /** @type {boolean} */
+    this.partOfURL = false;
+    /** @type {boolean} */
+    this.partOfKeyWord = false;
+    /** @type {string} */
+    this.keyWordColor = '#ff0000';
+    /** @type {string} */
+    this.fullurl = '';
+    /** @type {string | null} */
+    this.linkUrl = null;
+    /** @type {string | null} */
+    this.linkId = null;
+  }
 
-function TermChar(ch) {
-  this.ch = ch;
-  this.resetAttr();
-  this.needUpdate = false;
-  this.isLeadByte = false;
-  this.startOfURL = false;
-  this.endOfURL = false;
-  this.partOfURL = false;
-  this.partOfKeyWord = false;
-  this.keyWordColor = '#ff0000';
-  this.fullurl = '';
-}
-
-// static variable for all TermChar objects
-TermChar.defaultFg = 7;
-TermChar.defaultBg = 0;
-
-TermChar.prototype = {
-
-  assignParams: function(params) {
-    params.forEach(v => {    
+  /**
+   * @param {number[]} params
+   */
+  assignParams(params) {
+    if (!Array.isArray(params)) return;
+    params.forEach(rawV => {
+      const v = typeof rawV === 'number' && Number.isFinite(rawV) ? rawV : parseInt(rawV, 10);
+      if (!Number.isFinite(v)) return;
       switch (v) {
       case 0: // reset
         this.resetAttr();
         break;
       case 1: // bright
-        this.bright=true;
+        this.bright = true;
         break;
       case 4:
-        this.underLine=true;
+        this.underLine = true;
         break;
       case 5: // blink
       case 6:
-        this.blink=true;
+        this.blink = true;
         break;
       case 7: // invert
-        this.invert=true;
+        this.invert = true;
         break;
       case 8:
         // invisible is not supported
         break;
-      /*
-      case 22: // normal, or not bright
-        this.bright=false;
-        break;
-      case 24: // not underlined
-        this.underLine=false;
-        break;
-      case 25: // steady, or not blink
-        this.blink=false;
-        break;
-      case 27: // positive, or not invert
-        this.invert=false;
-        break;
-      */
       default:
-        if (v <= 37) {
+        if (v === 39) {
+          this.fg = 7;
+        } else if (v === 49) {
+          this.bg = 0;
+        } else if (v <= 37) {
           if (v >= 30) { // fg
             this.fg = v - 30;
           }
         } else if (v >= 40) {
-          if (v<=47) { //bg
+          if (v <= 47) { //bg
             this.bg = v - 40;
           }
         }
         break;
       }
-    })
-  },
+    });
+  }
 
-  copyFromNewChar: function() {
-    this.ch = TermChar.newChar.ch;
-    this.isLeadByte = TermChar.newChar.isLeadByte;
+  copyFromNewChar() {
+    this.ch = TermChar.newChar ? TermChar.newChar.ch : ' ';
+    this.isDBCSLead = TermChar.newChar ? TermChar.newChar.isDBCSLead : false;
+    this.isDBCSTrail = TermChar.newChar ? TermChar.newChar.isDBCSTrail : false;
+    this.linkUrl = null;
+    this.linkId = null;
+    this.startOfURL = false;
+    this.endOfURL = false;
+    this.partOfURL = false;
+    this.fullurl = '';
     this.resetAttr();
-  },
+  }
 
-  copyAttr: function(attr) {
-    this.fg = attr.fg;
-    this.bg = attr.bg;
-    this.bright = attr.bright;
-    this.invert = attr.invert;
-    this.blink = attr.blink;
-    this.underLine = attr.underLine;
-  },
+  /**
+   * @param {TermChar} attr
+   */
+  copyAttr(attr) {
+    if (!attr || typeof attr !== 'object') return;
+    this.fg = typeof attr.fg === 'number' ? attr.fg : 7;
+    this.bg = typeof attr.bg === 'number' ? attr.bg : 0;
+    this.bright = Boolean(attr.bright);
+    this.invert = Boolean(attr.invert);
+    this.blink = Boolean(attr.blink);
+    this.underLine = Boolean(attr.underLine);
+  }
 
-  resetAttr: function() {
+  resetAttr() {
     this.fg = 7;
     this.bg = 0;
     this.bright = false;
     this.invert = false;
     this.blink = false;
     this.underLine = false;
-  },
+  }
+
+  /**
+   * @param {TermChar} [oth]
+   * @returns {boolean}
+   */
+  equalsAttr(oth) {
+    if (!oth) return false;
+    return this.fg === oth.fg &&
+           this.bg === oth.bg &&
+           this.bright === Boolean(oth.bright) &&
+           this.invert === Boolean(oth.invert) &&
+           this.blink === Boolean(oth.blink) &&
+           this.underLine === Boolean(oth.underLine);
+  }
+
+  /**
+   * @returns {TermChar}
+   */
+  cloneAttr() {
+    const c = new TermChar(' ');
+    c.copyAttr(this);
+    return c;
+  }
   
-  getFg: function() {
+  getFg() {
     if (this.invert)
       return this.bright ? (this.bg + 8) : this.bg;
     return this.bright ? (this.fg + 8) : this.fg;
-  },
+  }
 
-  getBg: function() {
+  getBg() {
     return this.invert ? this.fg : this.bg;
-  },
+  }
 
-  getColor: function() {
+  getColor() {
     return new ColorState(this.getFg(), this.getBg(), this.blink);
-  },
+  }
 
-  isUnderLine: function() {
+  isUnderLine() {
     return this.underLine;
-  },
+  }
 
-  isStartOfURL : function() {
+  isStartOfURL() {
     return this.startOfURL;
-  },
+  }
 
-  isEndOfURL : function() {
+  isEndOfURL() {
     return this.endOfURL;
-  },
+  }
 
-  isPartOfURL : function() {
+  isPartOfURL() {
     return this.partOfURL;
-  },
+  }
 
-  isPartOfKeyWord : function() {
+  isPartOfKeyWord() {
     return this.partOfKeyWord;
-  },
+  }
 
-  getKeyWordColor : function() {
+  getKeyWordColor() {
     return this.keyWordColor;
-  },
+  }
 
-  getFullURL: function() {
+  getFullURL() {
     return this.fullurl;
   }
-};
 
-TermChar.newChar = new TermChar(' ')
-
-export function TermBuf(cols, rows) {
-  this.cols = cols;
-  this.rows = rows;
-  this.view = null;
-  this.cur_x = 0;
-  this.cur_y = 0;
-  this.cur_x_sav = -1;
-  this.cur_y_sav = -1;
-  this.scrollStart = 0;
-  this.scrollEnd = rows-1;
-  this._nowHighlight = -1;
-  Object.defineProperty(this, 'nowHighlight', {
-    set: this.setHighlight.bind(this),
-    get: function() { return this._nowHighlight; }.bind(this)
-  });
-  this.tempMouseCol = 0;
-  this.tempMouseRow = 0;
-  this.mouseCursor = 0;
-  this.highlightCursor = true;
-  this.useMouseBrowsing = true;
-  //this.scrollingTop=0;
-  //this.scrollingBottom=23;
-  this.attr = new TermChar(' ');
-  this.disableLinefeed = false;
-  this.altScreen = '';
-  this.changed = false;
-  this.posChanged = false;
-  this.pageState = 0;
-  this.forceFullWidth = false;
-
-  this.startedEasyReading = false;
-  this.easyReadingShowReplyText = false;
-  this.easyReadingShowPushInitText = false;
-  this.prevPageState = 0;
-
-  this.lines = new Array(rows);
-
-  this.pageLines = [];
-  this.pageWrappedLines = [];
-
-  this.lineChangeds = new Array(rows);
-
-  this.viewBufferTimer = 30;
-
-  while (--rows >= 0) {
-    var line = new Array(cols);
-    var c = cols;
-    while (--c >= 0) {
-      line[c] = new TermChar(' ');
-    }
-    this.lines[rows] = line;
-    //this.keyWordLine[rows]=false;
+  getLinkUrl() {
+    return this.linkUrl;
   }
-  this.BBSWin = document.getElementById('BBSWindow');
-  this.titleBase = process.env.PTTCHROME_PAGE_TITLE;
-  this.titleSite = null;
-  this.titleConn = null;
-  this.dynamicTitle = (process.env.PTTCHROME_DYNAMIC_TITLE !== false);
-  document.title = this.title = this.titleBase;
+
+  getLinkId() {
+    return this.linkId;
+  }
 }
 
-TermBuf.prototype = {
+TermChar.newChar = new TermChar(' ');
 
-  resize: function(cols, rows) {
+/**
+ * Trims trailing punctuation and unbalanced closing delimiters from a candidate URL string.
+ * Ensures URLs enclosed in parentheses (e.g. `(https://example.com)`) or quotes
+ * do not erroneously include the closing punctuation, while preserving balanced
+ * parentheses (e.g. Wikipedia links like `https://en.wikipedia.org/wiki/Foo_(bar)`).
+ *
+ * @param {string} url
+ * @returns {number} valid URL length (0 if invalid)
+ */
+export function getValidUrlLength(url) {
+  if (!url || typeof url !== 'string') return 0;
+  let len = url.length;
+  while (len > 0) {
+    const last = url[len - 1];
+    if (
+      last === '.' ||
+      last === ',' ||
+      last === ';' ||
+      last === ':' ||
+      last === '?' ||
+      last === '!' ||
+      last === '\'' ||
+      last === '"'
+    ) {
+      len--;
+      continue;
+    }
+    if (last === ')') {
+      let openP = 0;
+      let closeP = 0;
+      for (let i = 0; i < len; i++) {
+        if (url[i] === '(') openP++;
+        else if (url[i] === ')') closeP++;
+      }
+      if (closeP > openP) {
+        len--;
+        continue;
+      }
+    }
+    if (last === ']') {
+      let openB = 0;
+      let closeB = 0;
+      for (let i = 0; i < len; i++) {
+        if (url[i] === '[') openB++;
+        else if (url[i] === ']') closeB++;
+      }
+      if (closeB > openB) {
+        len--;
+        continue;
+      }
+    }
+    break;
+  }
+  if (
+    !/^(https?|ftp|telnet):\/\/.+/i.test(url.slice(0, len)) &&
+    !/^pid:\/\/\d+/i.test(url.slice(0, len))
+  ) {
+    return 0;
+  }
+  return len;
+}
+
+export class TermBuf extends EventEmitter {
+  timerUpdate = null;
+  animFrameId = null;
+  uriRegEx = /((ftp|http|https|telnet):\/\/([A-Za-z0-9_]+:{0,1}[A-Za-z0-9_]*@)?([A-Za-z0-9_#!:.?+=&%@!\-\/\$\^,;|*~'()]+)(:[0-9]+)?(\/|\/([A-Za-z0-9_#!:.?+=&%@!\-\/]))?)|(pid:\/\/(\d{1,10}))/ig;
+
+  /**
+   * @param {number} cols
+   * @param {number} rows
+   * @param {string|BaseSite|null} [site]
+   */
+  constructor(cols, rows, site = null) {
+    super();
+    const validCols = (typeof cols === 'number' && Number.isFinite(cols) && cols > 0) ? Math.floor(cols) : 80;
+    const validRows = (typeof rows === 'number' && Number.isFinite(rows) && rows > 0) ? Math.floor(rows) : 24;
+    this.cols = validCols;
+    this.rows = validRows;
+    this.cur_x = 0;
+    this.cur_y = 0;
+    this.cur_x_sav = -1;
+    this.cur_y_sav = -1;
+    this.scrollStart = 0;
+    this.scrollEnd = validRows - 1;
+    /** @type {{ url: string, id: string } | null} */
+    this.currentHyperlink = null;
+    this.locator = new Locator(this);
+    this.on('term:connect', () => {
+      this.resetScrollRegion();
+      this.currentHyperlink = null;
+      this.locator?.reset?.();
+    });
+    this.on('term:disconnect', () => {
+      this.resetScrollRegion();
+      this.currentHyperlink = null;
+      this.locator?.reset?.();
+    });
+    //this.scrollingTop=0;
+    //this.scrollingBottom=23;
+    this.attr = new TermChar(' ');
+    this.halfAttr = null;
+    this.disableLinefeed = false;
+    this.altScreen = '';
+    this.changed = false;
+    this.posChanged = false;
+    this.blinkPending = false;
+    this.bellOccurred = false;
+    this.inSyncUpdate = false;
+    this.hasFrameSync = false;
+    this._syncUpdateTimeout = null;
+
+    this.site = site ? (typeof site === 'string' ? getSite(site) : site) : getSite(process.env.SITE_TYPE || 'auto');
+
+    /** @type {TermChar[][]} */
+    this.lines = new Array(validRows);
+
+    this.lineChangeds = new Array(validRows);
+
+    this.viewBufferTimer = 30;
+
+    let r = validRows;
+    while (--r >= 0) {
+      const line = new Array(validCols);
+      let c = validCols;
+      while (--c >= 0) {
+        line[c] = new TermChar(' ');
+      }
+      this.lines[r] = line;
+      //this.keyWordLine[rows]=false;
+    }
+  }
+
+  /**
+   * @param {number} cols
+   * @param {number} rows
+   */
+  resize(cols, rows) {
+    cols = (typeof cols === 'number' && Number.isFinite(cols) && cols > 0) ? Math.floor(cols) : this.cols;
+    rows = (typeof rows === 'number' && Number.isFinite(rows) && rows > 0) ? Math.floor(rows) : this.rows;
+    const clamped = this.site.clampTermSize(cols, rows);
+    if (clamped && typeof clamped.cols === 'number' && typeof clamped.rows === 'number') {
+      cols = Math.floor(clamped.cols);
+      rows = Math.floor(clamped.rows);
+    }
+    console.debug(`[TermBuf.resize] Resizing buffer to ${cols}x${rows}`);
     this.cols = cols;
     this.rows = rows;
     this.lineChangeds.length = rows;
+    this.scrollStart = 0;
     this.scrollEnd = rows - 1;
     this.lines.length = rows;
     for (let r = 0; r < rows; r++) {
@@ -283,34 +363,103 @@ TermBuf.prototype = {
         }
       }
     }
-  },
+    if (this.cur_x >= cols) this.cur_x = cols - 1;
+    if (this.cur_y >= rows) this.cur_y = rows - 1;
+    this.emit('resize', { cols, rows });
+  }
 
-  timerUpdate: null,
+  get autoWrap() {
+    return !this.disableLinefeed;
+  }
 
-  uriRegEx: /((ftp|http|https|telnet):\/\/([A-Za-z0-9_]+:{0,1}[A-Za-z0-9_]*@)?([A-Za-z0-9_#!:.?+=&%@!\-\/\$\^,;|*~'()]+)(:[0-9]+)?(\/|\/([A-Za-z0-9_#!:.?+=&%@!\-\/]))?)|(pid:\/\/(\d{1,10}))/ig,
+  set autoWrap(val) {
+    this.disableLinefeed = !val;
+  }
 
-  setView: function(view) {
-    this.view = view;
-  },
+  get wrap() {
+    return this.autoWrap;
+  }
 
-  assignParamsToAttrs: function(params) {
-    this.attr.assignParams(params)
-  },
+  set wrap(val) {
+    this.autoWrap = val;
+  }
 
-  puts: function(str) {
-    if (!str)
+  get site() {
+    return this._site;
+  }
+
+  set site(val) {
+    if (this._site) {
+      this._site.detach(this);
+    }
+    this._site = val;
+    if (val) {
+      val.attach(this);
+      if (val.wrap !== undefined) {
+        this.autoWrap = Boolean(val.wrap);
+      }
+    }
+  }
+
+  checkLeftDBCS() {
+    if (this.cur_x > 1 && this.lines) {
+      const line = this.lines[this.cur_y];
+      const ch = line && line[this.cur_x - 2];
+      if (ch && ch.isDBCSLead) return true;
+    }
+    return false;
+  }
+
+  checkCurrentDBCS() {
+    if (this.lines) {
+      const line = this.lines[this.cur_y];
+      const ch = line && line[this.cur_x];
+      if (ch && ch.isDBCSLead) return true;
+    }
+    return false;
+  }
+
+  /**
+   * @param {number[]} params
+   */
+  assignParamsToAttrs(params) {
+    if (!Array.isArray(params)) return;
+    for (let i = 0; i < params.length; ++i) {
+      const rawV = params[i];
+      const v = typeof rawV === 'number' && Number.isFinite(rawV) ? rawV : parseInt(rawV, 10);
+      if (v === 66) {
+        this.halfAttr = this.attr.cloneAttr();
+      } else {
+        this.attr.assignParams([rawV]);
+      }
+    }
+  }
+
+  /**
+   * @param {string} str
+   * @param {TermChar} [attr]
+   */
+  puts(str, attr = null) {
+    if (!str || typeof str !== 'string')
       return;
-    var cols = this.cols;
-    var rows = this.rows;
-    var lines = this.lines;
-    var n = str.length;
-    var line = lines[this.cur_y];
-    for (var i = 0; i < n; ++i) {
-      var ch = str[i];
+    const cols = this.cols;
+    const rows = this.rows;
+    const lines = this.lines;
+    const n = str.length;
+    if (!Number.isFinite(this.cur_x) || this.cur_x < 0) this.cur_x = 0;
+    if (!Number.isFinite(this.cur_y) || this.cur_y < 0) this.cur_y = 0;
+    if (this.cur_y >= rows) this.cur_y = rows - 1;
+    let line = lines[this.cur_y];
+    if (!line) {
+      this.gotoPos(this.cur_x, this.cur_y);
+      line = lines[this.cur_y];
+    }
+    for (let i = 0; i < n; ++i) {
+      const ch = str[i];
       switch (ch) {
       case '\x07':
-        // FIXME: beep (1)Sound (2)AlertNotification (3)change icon
-        // should only play sound
+        this.bellOccurred = true;
+        this.emit('bell');
         continue;
       case '\b':
         this.back();
@@ -321,8 +470,10 @@ TermBuf.prototype = {
       case '\n':
       case '\f':
       case '\v':
+        this.halfAttr = null;
         this.lineFeed();
         line = lines[this.cur_y];
+        if (!line) line = lines[this.cur_y] = new Array(cols).fill(null).map(() => new TermChar(' '));
         continue;
       case '\0':
           continue;
@@ -332,68 +483,197 @@ TermBuf.prototype = {
 
       if (this.cur_x >= cols) {
         // next line
-        if(!this.disableLinefeed) this.lineFeed();
-        this.cur_x=0;
-        line = lines[this.cur_y];
-        this.posChanged=true;
+        if (!this.disableLinefeed) {
+          this.lineFeed();
+          this.cur_x = 0;
+          line = lines[this.cur_y];
+          if (!line) line = lines[this.cur_y] = new Array(cols).fill(null).map(() => new TermChar(' '));
+          this.posChanged = true;
+        } else {
+          this.cur_x = cols - 1;
+        }
       }
 
       switch (ch) {
       case '\t':
         this.tab();
         break;
-      default:
-        var ch2 = line[this.cur_x];
-        ch2.ch=ch;
-        ch2.copyAttr(this.attr);
-        ch2.needUpdate=true;
-        ++this.cur_x;
-        if (ch2.isLeadByte) // previous state before this function
-          line[this.cur_x].needUpdate=true;
-        if (this.view.charset == 'UTF-8' && this.isFullWidth(ch) && this.cur_x < cols) {
-          ch2 = line[this.cur_x];
-          ch2.ch = '';
-          ch2.copyAttr(this.attr);
-          ch2.needUpdate = true;
-          ++this.cur_x;
-          // assume server will handle mouse moving on full-width char
+      default: {
+        const isWide = isFullWidth(ch);
+        if (isWide && this.cur_x >= cols - 1) {
+          if (!this.disableLinefeed) {
+            this.lineFeed();
+            this.cur_x = 0;
+            line = lines[this.cur_y];
+            if (!line) line = lines[this.cur_y] = new Array(cols).fill(null).map(() => new TermChar(' '));
+            this.posChanged = true;
+          } else {
+            if (this.cur_x >= cols) this.cur_x = cols - 1;
+            let ch2 = line[this.cur_x];
+            if (ch2) {
+              const leadAttr = attr || this.halfAttr || this.attr;
+              this.halfAttr = null;
+              ch2.ch = ch;
+              ch2.copyAttr(leadAttr);
+              ch2.linkUrl = this.currentHyperlink ? this.currentHyperlink.url : null;
+              ch2.linkId = this.currentHyperlink ? this.currentHyperlink.id : null;
+              ch2.needUpdate = true;
+              ch2.isDBCSLead = false;
+              ch2.isDBCSTrail = false;
+              this.changed = true;
+              this.posChanged = true;
+            }
+            break;
+          }
         }
-        this.changed = true;
-        this.posChanged = true;
+
+        if (this.cur_x >= cols) this.cur_x = cols - 1;
+        let ch2 = line[this.cur_x];
+        if (ch2) {
+          const leadAttr = attr || this.halfAttr || this.attr;
+          this.halfAttr = null;
+          ch2.ch = ch;
+          ch2.copyAttr(leadAttr);
+          ch2.linkUrl = this.currentHyperlink ? this.currentHyperlink.url : null;
+          ch2.linkId = this.currentHyperlink ? this.currentHyperlink.id : null;
+          ch2.needUpdate = true;
+          ch2.isDBCSLead = isWide;
+          ch2.isDBCSTrail = false;
+          ++this.cur_x;
+
+          if (isWide && this.cur_x < cols) {
+            let chTrail = line[this.cur_x];
+            if (chTrail) {
+              chTrail.ch = '';
+              chTrail.copyAttr(attr || this.attr);
+              chTrail.linkUrl = this.currentHyperlink ? this.currentHyperlink.url : null;
+              chTrail.linkId = this.currentHyperlink ? this.currentHyperlink.id : null;
+              chTrail.needUpdate = true;
+              chTrail.isDBCSLead = false;
+              chTrail.isDBCSTrail = true;
+              ++this.cur_x;
+            }
+          }
+          if (this.disableLinefeed && this.cur_x >= cols) {
+            this.cur_x = cols - 1;
+          }
+          this.changed = true;
+          this.posChanged = true;
+        }
+        break;
+      }
       }
     }
     this.queueUpdate();
-  },
+  }
 
-  updateCharAttr: function() {
-    var cols = this.cols;
-    var rows = this.rows;
-    var lines = this.lines;
-    for (var row = 0; row < rows; ++row) {
-      var line = lines[row];
-      var needUpdate = false;
-      for (var col = 0; col < cols; ++col) {
-        var ch = line[col];
+  /**
+   * Put a DBCS character (occupying 2 cells) with lead and trail cell attributes.
+   * Lead cell has isDBCSLead=true, and trail cell has isDBCSTrail=true.
+   * @param {string} ch
+   * @param {TermChar} [leadAttr]
+   * @param {TermChar} [trailAttr]
+   */
+  putDBCS(ch, leadAttr, trailAttr) {
+    const cols = this.cols;
+    const lines = this.lines;
+    let line = lines[this.cur_y];
+    if (!line) line = lines[this.cur_y] = new Array(cols).fill(null).map(() => new TermChar(' '));
+
+    if (this.cur_x >= cols - 1) {
+      if (!this.disableLinefeed) {
+        this.lineFeed();
+        this.cur_x = 0;
+        line = lines[this.cur_y];
+        if (!line) line = lines[this.cur_y] = new Array(cols).fill(null).map(() => new TermChar(' '));
+        this.posChanged = true;
+      } else {
+        if (this.cur_x >= cols) this.cur_x = cols - 1;
+        let ch2 = line[this.cur_x];
+        if (ch2) {
+          ch2.ch = ch;
+          ch2.copyAttr(leadAttr || this.attr);
+          ch2.linkUrl = this.currentHyperlink ? this.currentHyperlink.url : null;
+          ch2.linkId = this.currentHyperlink ? this.currentHyperlink.id : null;
+          ch2.needUpdate = true;
+          ch2.isDBCSLead = false;
+          ch2.isDBCSTrail = false;
+          this.changed = true;
+          this.posChanged = true;
+        }
+        this.queueUpdate();
+        return;
+      }
+    }
+
+    if (this.cur_x >= cols) this.cur_x = cols - 1;
+    let ch2 = line[this.cur_x];
+    if (ch2) {
+      ch2.ch = ch;
+      ch2.copyAttr(leadAttr || this.attr);
+      ch2.linkUrl = this.currentHyperlink ? this.currentHyperlink.url : null;
+      ch2.linkId = this.currentHyperlink ? this.currentHyperlink.id : null;
+      ch2.needUpdate = true;
+      ch2.isDBCSLead = true;
+      ch2.isDBCSTrail = false;
+      ++this.cur_x;
+
+      if (this.cur_x < cols) {
+        let chTrail = line[this.cur_x];
+        if (chTrail) {
+          chTrail.ch = '';
+          chTrail.copyAttr(trailAttr || this.attr);
+          chTrail.linkUrl = this.currentHyperlink ? this.currentHyperlink.url : null;
+          chTrail.linkId = this.currentHyperlink ? this.currentHyperlink.id : null;
+          chTrail.needUpdate = true;
+          chTrail.isDBCSLead = false;
+          chTrail.isDBCSTrail = true;
+          ++this.cur_x;
+        }
+      }
+      if (this.disableLinefeed && this.cur_x >= cols) {
+        this.cur_x = cols - 1;
+      }
+      this.changed = true;
+      this.posChanged = true;
+    }
+    this.queueUpdate();
+  }
+
+  updateCharAttr() {
+    const cols = this.cols;
+    const rows = this.rows;
+    const lines = this.lines;
+    for (let row = 0; row < rows; ++row) {
+      const line = lines[row];
+      let needUpdate = false;
+      for (let col = 0; col < cols; ++col) {
+        let ch = line[col];
         if (ch.needUpdate)
             needUpdate=true;
-        // all chars > ASCII code are regarded as lead byte of DBCS.
-        // FIXME: this is not correct, but works most of the times.
-        if ( this.isFullWidth(ch.ch) && (col + 1) < cols ) {
-          ch.isLeadByte = true;
+
+        if ((ch.isDBCSLead || isFullWidth(ch.ch)) && (col + 1) < cols) {
+          ch.isDBCSLead = true;
+          ch.isDBCSTrail = false;
           ++col;
-          var ch0 = ch;
+          const ch0 = ch;
           ch = line[col];
+          ch.isDBCSLead = false;
+          ch.isDBCSTrail = true;
           if (ch.needUpdate)
             needUpdate = true;
-          // ensure simutaneous redraw of both bytes
-          if ( ch0.needUpdate != ch.needUpdate ) {
+          // ensure simultaneous redraw of both bytes
+          if (ch0.needUpdate !== ch.needUpdate) {
             ch0.needUpdate = ch.needUpdate = true;
           }
-        } else if (ch.isleadbyte && (col+1) < cols) {
-          var ch2 = line[col+1];
-          ch2.needUpdate = true;
+        } else {
+          ch.isDBCSLead = false;
+          ch.isDBCSTrail = false;
+          if (ch.ch === '') {
+            ch.ch = ' ';
+            ch.needUpdate = true;
+          }
         }
-        ch.isLeadByte = false;
       }
 
       if (needUpdate) { // this line has been changed
@@ -401,142 +681,212 @@ TermBuf.prototype = {
         // perform URI detection again
         // remove all previously cached uri positions
         if (line.uris) {
-          var uris = line.uris;
-          var nuris = uris.length;
+          const uris = line.uris;
+          const nuris = uris.length;
 
           // FIXME: this is inefficient
-          for (var iuri = 0; iuri < nuris; ++iuri) {
-            var uri = uris[iuri];
-            line[uri[0]].startOfURL = false;
-            line[uri[0]].endOfURL = false;
-            line[uri[0]].fullurl = '';
-            line[uri[1]-1].startOfURL = false;
-            line[uri[1]-1].endOfURL = false;
-            line[uri[1]-1].fullurl = '';
-            for (var col=uri[0]; col < uri[1]; ++col) {
-              line[col].partOfURL = false;
-              line[col].needUpdate = true;
+          for (let iuri = 0; iuri < nuris; ++iuri) {
+            const uri = uris[iuri];
+            if (line[uri[0]]) {
+              line[uri[0]].startOfURL = false;
+              line[uri[0]].fullurl = '';
+            }
+            if (line[uri[1] - 1]) {
+              line[uri[1] - 1].endOfURL = false;
+            }
+            for (let c = uri[0]; c < uri[1]; ++c) {
+              if (line[c]) {
+                line[c].partOfURL = false;
+                line[c].needUpdate = true;
+              }
             }
           }
-          line.uris=null;
+          line.uris = null;
         }
-        var s = '';
-        for (var col = 0; col < cols; ++col)
-            s += line[col].ch;
-        if (this.view.charset != 'UTF-8')
-          s = s.replace(/[^\x00-\x7f]./g,'\xab\xcd');
-        else {
-          var str = '';
-          for (var i = 0; i < s.length; ++i) {
-            str += s.charAt(i);
-            if (this.isFullWidth(s.charAt(i)))
-              str += s.charAt(i);
+
+        let uris = null;
+
+        // 1. Scan for explicit OSC 8 hyperlinks on this line
+        let colIdx = 0;
+        while (colIdx < cols) {
+          const ch = line[colIdx];
+          if (ch && ch.linkUrl) {
+            const startCol = colIdx;
+            const linkUrl = ch.linkUrl;
+            const linkId = ch.linkId;
+            while (
+              colIdx < cols &&
+              line[colIdx] &&
+              line[colIdx].linkUrl === linkUrl &&
+              line[colIdx].linkId === linkId
+            ) {
+              colIdx++;
+            }
+            const endCol = colIdx;
+            if (!uris) uris = [];
+            uris.push([startCol, endCol, linkUrl]);
+          } else {
+            colIdx++;
           }
-          s = str;
         }
-        var res;
-        var uris = null;
-        // pairs of URI start and end positions are stored in line.uri.
+
+        let s = '';
+        const colMap = [];
+        const colEndMap = [];
+        for (let col = 0; col < cols; ++col) {
+          const c = line[col];
+          if (!c || c.isDBCSTrail || c.ch === '') {
+            continue;
+          }
+          colMap.push(col);
+          const colWidth = (c.isDBCSLead || isFullWidth(c.ch)) ? 2 : 1;
+          colEndMap.push(col + colWidth);
+          // If the character already has an explicit OSC 8 hyperlink, mask it with spaces
+          // so regex / custom link detection does not rescan or override this text.
+          s += c.linkUrl ? ' '.repeat(c.ch.length) : c.ch;
+        }
+
+        let res;
+        this.uriRegEx.lastIndex = 0;
+        // pairs of URI start and end positions are stored in line.uris.
         while ( (res = this.uriRegEx.exec(s)) !== null ) {
-          if (!uris)   uris = [];
-          var uri = [res.index, res.index+res[0].length];
-          uris.push(uri);
-          // dump('found URI: ' + res[0] + '\n');
+          const matchStr = res[0];
+          const validLen = getValidUrlLength(matchStr);
+          if (validLen <= 0) {
+            continue;
+          }
+          const startCol = colMap[res.index] ?? res.index;
+          const endCol = (validLen > 0 && colEndMap)
+            ? (colEndMap[res.index + validLen - 1] ?? (res.index + validLen))
+            : (startCol + validLen);
+          const overlap = uris && uris.some(u => !(endCol <= u[0] || startCol >= u[1]));
+          if (!overlap) {
+            if (!uris) uris = [];
+            uris.push([startCol, endCol]);
+          }
+        }
+
+        const customLinks = this.site.detectCustomLinks(s, line, this);
+        if (Array.isArray(customLinks)) {
+          for (let i = 0; i < customLinks.length; ++i) {
+            const cl = customLinks[i];
+            if (cl && typeof cl.start === 'number' && typeof cl.end === 'number' && cl.end > cl.start) {
+              const startCol = colMap[cl.start] ?? cl.start;
+              const endCol = (cl.end > cl.start && colEndMap)
+                ? (colEndMap[cl.end - 1] ?? cl.end)
+                : cl.end;
+              const overlap = uris && uris.some(u => !(endCol <= u[0] || startCol >= u[1]));
+              if (!overlap) {
+                if (!uris) uris = [];
+                uris.push([startCol, endCol, cl.url]);
+              }
+            }
+          }
         }
 
         if (uris) {
+          uris.sort((a, b) => a[0] - b[0]);
           line.uris = uris;
-          // dump(line.uris.length + "uris found\n");
-        }
-        //
-        if (line.uris) {
-          var uris = line.uris;
-          var nuris = uris.length;
-          for (var iuri = 0; iuri < nuris; ++iuri) {
-            var uri = uris[iuri];
-            var urlTemp = '';
+          const nuris = uris.length;
+          for (let iuri = 0; iuri < nuris; ++iuri) {
+            const uri = uris[iuri];
+            let urlTemp = '';
 
-            for (var col = uri[0]; col < uri[1]; ++col) {
-              urlTemp += line[col].ch;
-              line[col].partOfURL = true;
-              line[col].needUpdate = true; //fix link bug
+            for (let col = uri[0]; col < uri[1]; ++col) {
+              if (line[col]) urlTemp += line[col].ch;
             }
-            var u;
-            if (this.view.charset != 'UTF-8')
-              u = urlTemp;//this.conv.convertStringToUTF8(urlTemp, this.view.charset,  true);
-            else {
-              var str = '';
-              for (var i = 0; i < urlTemp.length; ++i) {
-                str += urlTemp.charAt(i);
-                if (this.isFullWidth(urlTemp.charAt(i)))
-                  str += urlTemp.charAt(i);
+            const targetUrl = uri[2] || urlTemp;
+            const fullurl = this.site.resolveUrl(targetUrl);
+            for (let col = uri[0]; col < uri[1]; ++col) {
+              if (line[col]) {
+                line[col].partOfURL = true;
+                line[col].fullurl = fullurl;
+                line[col].needUpdate = true; //fix link bug
               }
-              u = str;
             }
-            var urlTemp2 = urlTemp.toLowerCase();
-            line[uri[0]].startOfURL = true;
-            if (urlTemp2.substr(0,6) == 'pid://') {
-              line[uri[0]].fullurl='http://www.pixiv.net/member_illust.php?mode=big&illust_id='+urlTemp2.substr(6,15);
-            } else {
-              //var g = encodeURI(u);
-              //line[uri[0]].fullurl=g;
-              line[uri[0]].fullurl = u;
+            if (line[uri[0]]) {
+              line[uri[0]].startOfURL = true;
             }
-            line[uri[1]-1].endOfURL = true;
-            //line[uri[1]-1].needUpdate = true; //fix link bug, some wee need update 2 byte(this byte and prevous byte)
-            //for (var col = uri[0]; col < uri[1]; ++col)
-            //  line[col].fullurl = g;
+            if (line[uri[1] - 1]) {
+              line[uri[1] - 1].endOfURL = true;
+            }
           }
         }
         //
       }
     }
-  },
+  }
 
-  clear: function(param) {
-    var rows = this.rows;
-    var cols = this.cols;
-    var lines = this.lines;
+  /**
+   * @param {number} [param]
+   */
+  clear(param) {
+    let rows = this.rows;
+    const cols = this.cols;
+    const lines = this.lines;
+    const mode = (typeof param === 'number' && Number.isFinite(param)) ? Math.floor(param) : 0;
 
-    switch (param) {
-    case 0:
-      var line = lines[this.cur_y];
-      var col, row;
-      for (col = this.cur_x; col < cols; ++col) {
-        line[col].copyFromNewChar();
-        line[col].needUpdate = true;
+    switch (mode) {
+    case 0: {
+      if (this.cur_y >= 0 && this.cur_y < rows && lines[this.cur_y]) {
+        const line = lines[this.cur_y];
+        const cur_x = Math.max(0, Math.min(cols, (typeof this.cur_x === 'number' && Number.isFinite(this.cur_x)) ? Math.floor(this.cur_x) : 0));
+        for (let col = cur_x; col < cols; ++col) {
+          if (line[col]) {
+            line[col].copyFromNewChar();
+            line[col].needUpdate = true;
+          }
+        }
       }
-      for (row = this.cur_y; row < rows; ++row) {
-        line = lines[row];
-        for (col = 0; col < cols; ++col) {
-          line[col].copyFromNewChar();
-          line[col].needUpdate = true;
+      for (let row = Math.max(0, this.cur_y + 1); row < rows; ++row) {
+        const curLine = lines[row];
+        if (curLine) {
+          for (let col = 0; col < cols; ++col) {
+            if (curLine[col]) {
+              curLine[col].copyFromNewChar();
+              curLine[col].needUpdate = true;
+            }
+          }
         }
       }
       break;
-    case 1:
-      var line;
-      var col, row;
-      for (row = 0; row < this.cur_y; ++row) {
-        line = lines[row];
-        for (col = 0; col < cols; ++col) {
-          line[col].copyFromNewChar();
-          line[col].needUpdate = true;
+    }
+    case 1: {
+      const endRow = Math.min(rows, Math.max(0, this.cur_y));
+      for (let row = 0; row < endRow; ++row) {
+        const curLine = lines[row];
+        if (curLine) {
+          for (let col = 0; col < cols; ++col) {
+            if (curLine[col]) {
+              curLine[col].copyFromNewChar();
+              curLine[col].needUpdate = true;
+            }
+          }
         }
       }
-      line = lines[this.cur_y];
-      for (col = 0; col < this.cur_x; ++col) {
-        line[col].copyFromNewChar();
-        line[col].needUpdate = true;
+      if (this.cur_y >= 0 && this.cur_y < rows && lines[this.cur_y]) {
+        const line = lines[this.cur_y];
+        const cur_x = Math.max(0, Math.min(cols, (typeof this.cur_x === 'number' && Number.isFinite(this.cur_x)) ? Math.floor(this.cur_x) : 0));
+        for (let col = 0; col < cur_x; ++col) {
+          if (line[col]) {
+            line[col].copyFromNewChar();
+            line[col].needUpdate = true;
+          }
+        }
       }
       break;
+    }
     case 2:
       while (--rows >= 0) {
-        var col = cols;
-        var line = lines[rows];
-        while (--col >= 0) {
-          line[col].copyFromNewChar();
-          line[col].needUpdate = true;
+        let col = cols;
+        const line = lines[rows];
+        if (line) {
+          while (--col >= 0) {
+            if (line[col]) {
+              line[col].copyFromNewChar();
+              line[col].needUpdate = true;
+            }
+          }
         }
       }
       break;
@@ -544,120 +894,181 @@ TermBuf.prototype = {
     this.changed = true;
     this.gotoPos(0, 0);
     this.queueUpdate();
-  },
+  }
 
-  back: function() {
+  back() {
+    this.halfAttr = null;
+    if (!Number.isFinite(this.cur_x)) this.cur_x = 0;
     if (this.cur_x > 0) {
       --this.cur_x;
       this.posChanged = true;
       this.queueUpdate();
     }
-  },
+  }
 
-  tab: function(param) {
-    var mod = this.cur_x % 4;
+  /**
+   * @param {number} [param]
+   */
+  tab(param) {
+    this.halfAttr = null;
+    if (!Number.isFinite(this.cur_x) || this.cur_x < 0) this.cur_x = 0;
+    const p = (typeof param === 'number' && Number.isFinite(param) && param > 0) ? Math.floor(param) : 1;
+    const mod = this.cur_x % 4;
     this.cur_x += 4 - mod;
-    if (param > 1) this.cur_x += 4 * (param-1);
+    if (p > 1) this.cur_x += 4 * (p - 1);
     if (this.cur_x >= this.cols)
-      this.cur_x = this.cols-1;
+      this.cur_x = this.cols - 1;
     this.posChanged = true;
     this.queueUpdate();
-  },
+  }
 
-  backTab: function(param) {
-    var mod = this.cur_x % 4;
+  /**
+   * @param {number} [param]
+   */
+  backTab(param) {
+    this.halfAttr = null;
+    if (!Number.isFinite(this.cur_x) || this.cur_x < 0) this.cur_x = 0;
+    const p = (typeof param === 'number' && Number.isFinite(param) && param > 0) ? Math.floor(param) : 1;
+    const mod = this.cur_x % 4;
     this.cur_x -= (mod > 0 ? mod : 4);
-    if (param > 1) this.cur_x -= 4 * (param-1);
+    if (p > 1) this.cur_x -= 4 * (p - 1);
     if (this.cur_x < 0)
       this.cur_x = 0;
     this.posChanged = true;
     this.queueUpdate();
-  },
+  }
 
-  insert: function(param) {
-    var line = this.lines[this.cur_y];
-    var cols = this.cols;
-    var cur_x = this.cur_x;
-    if (cur_x > 0 && line[cur_x-1].isLeadByte) ++cur_x;
-    if (cur_x == cols) return;
-    if (cur_x + param >= cols) {
-      for(var col = cur_x; col < cols; ++col) {
-        line[col].copyFromNewChar();
-        line[col].needUpdate = true;
+  /**
+   * @param {number} [param]
+   */
+  insert(param) {
+    let p = (typeof param === 'number' && Number.isFinite(param) && param > 0) ? Math.floor(param) : 1;
+    if (this.cur_y < 0 || this.cur_y >= this.rows) return;
+    const line = this.lines[this.cur_y];
+    if (!line) return;
+    const cols = this.cols;
+    let cur_x = (typeof this.cur_x === 'number' && Number.isFinite(this.cur_x)) ? Math.floor(this.cur_x) : 0;
+    cur_x = Math.max(0, Math.min(cols, cur_x));
+    if (cur_x > 0 && line[cur_x - 1] && line[cur_x - 1].isDBCSLead) ++cur_x;
+    if (cur_x >= cols) return;
+    if (cur_x + p >= cols) {
+      for (let col = cur_x; col < cols; ++col) {
+        if (line[col]) {
+          line[col].copyFromNewChar();
+          line[col].needUpdate = true;
+        }
       }
     } else {
-      while (--param >= 0) {
-        var ch = line.pop();
-        line.splice(cur_x, 0, ch);
-        ch.copyFromNewChar();
+      while (--p >= 0) {
+        const ch = line.pop();
+        if (ch) {
+          line.splice(cur_x, 0, ch);
+          ch.copyFromNewChar();
+        }
       }
-      for (var col = cur_x; col < cols; ++col)
-        line[col].needUpdate = true;
+      for (let col = cur_x; col < cols; ++col) {
+        if (line[col]) line[col].needUpdate = true;
+      }
     }
     this.changed = true;
     this.queueUpdate();
-  },
+  }
 
-  del: function(param) {
-    var line = this.lines[this.cur_y];
-    var cols = this.cols;
-    var cur_x = this.cur_x;
-    if (cur_x > 0 && line[cur_x-1].isLeadByte) ++cur_x;
-    if (cur_x == cols) return;
-    if (cur_x + param >= cols) {
-      for (var col = cur_x; col < cols; ++col) {
-        line[col].copyFromNewChar();
-        line[col].needUpdate = true;
+  /**
+   * @param {number} [param]
+   */
+  del(param) {
+    let p = (typeof param === 'number' && Number.isFinite(param) && param > 0) ? Math.floor(param) : 1;
+    if (this.cur_y < 0 || this.cur_y >= this.rows) return;
+    const line = this.lines[this.cur_y];
+    if (!line) return;
+    const cols = this.cols;
+    let cur_x = (typeof this.cur_x === 'number' && Number.isFinite(this.cur_x)) ? Math.floor(this.cur_x) : 0;
+    cur_x = Math.max(0, Math.min(cols, cur_x));
+    if (cur_x > 0 && line[cur_x - 1] && line[cur_x - 1].isDBCSLead) ++cur_x;
+    if (cur_x >= cols) return;
+    if (cur_x + p >= cols) {
+      for (let col = cur_x; col < cols; ++col) {
+        if (line[col]) {
+          line[col].copyFromNewChar();
+          line[col].needUpdate = true;
+        }
       }
     } else {
-      var n = cols - cur_x - param;
-      while (--n >= 0)
-        line.splice(cur_x, 0, line.pop());
-      for (var col = cols - param; col < cols; ++col)
-        line[col].copyFromNewChar();
-      for (var col = cur_x; col < cols; ++col)
-        line[col].needUpdate = true;
+      let n = cols - cur_x - p;
+      while (--n >= 0) {
+        const ch = line.pop();
+        if (ch) line.splice(cur_x, 0, ch);
+      }
+      for (let col = cols - p; col < cols; ++col) {
+        if (line[col]) line[col].copyFromNewChar();
+      }
+      for (let col = cur_x; col < cols; ++col) {
+        if (line[col]) line[col].needUpdate = true;
+      }
     }
     this.changed = true;
     this.queueUpdate();
-  },
+  }
 
-  eraseChar: function(param) {
-    var line = this.lines[this.cur_y];
-    var cols = this.cols;
-    var cur_x = this.cur_x;
-    if (cur_x > 0 && line[cur_x-1].isLeadByte) ++cur_x;
-    if (cur_x == cols) return;
-    var n = (cur_x + param > cols) ? cols : cur_x + param;
-    for (var col = cur_x; col < n; ++col) {
-      line[col].copyFromNewChar();
-      line[col].needUpdate = true;
+  /**
+   * @param {number} [param]
+   */
+  eraseChar(param) {
+    const p = (typeof param === 'number' && Number.isFinite(param) && param > 0) ? Math.floor(param) : 1;
+    if (this.cur_y < 0 || this.cur_y >= this.rows) return;
+    const line = this.lines[this.cur_y];
+    if (!line) return;
+    const cols = this.cols;
+    let cur_x = (typeof this.cur_x === 'number' && Number.isFinite(this.cur_x)) ? Math.floor(this.cur_x) : 0;
+    cur_x = Math.max(0, Math.min(cols, cur_x));
+    if (cur_x > 0 && line[cur_x - 1] && line[cur_x - 1].isDBCSLead) ++cur_x;
+    if (cur_x >= cols) return;
+    const n = (cur_x + p > cols) ? cols : cur_x + p;
+    for (let col = cur_x; col < n; ++col) {
+      if (line[col]) {
+        line[col].copyFromNewChar();
+        line[col].needUpdate = true;
+      }
     }
     this.changed = true;
     this.queueUpdate();
-  },
+  }
 
-  eraseLine: function(param) {
-    var line = this.lines[this.cur_y];
-    var cols = this.cols;
-    switch (param) {
-    case 0: // erase to rigth
-      for (var col = this.cur_x; col < cols; ++col) {
-        line[col].copyFromNewChar();
-        line[col].needUpdate = true;
+  /**
+   * @param {number} [param]
+   */
+  eraseLine(param) {
+    if (this.cur_y < 0 || this.cur_y >= this.rows) return;
+    const line = this.lines[this.cur_y];
+    if (!line) return;
+    const cols = this.cols;
+    const mode = (typeof param === 'number' && Number.isFinite(param)) ? Math.floor(param) : 0;
+    const cur_x = Math.max(0, Math.min(cols, (typeof this.cur_x === 'number' && Number.isFinite(this.cur_x)) ? Math.floor(this.cur_x) : 0));
+    switch (mode) {
+    case 0: // erase to right
+      for (let col = cur_x; col < cols; ++col) {
+        if (line[col]) {
+          line[col].copyFromNewChar();
+          line[col].needUpdate = true;
+        }
       }
       break;
-    case 1: //erase to left
-      var cur_x = this.cur_x;
-      for (var col = 0; col < cur_x; ++col) {
-        line[col].copyFromNewChar();
-        line[col].needUpdate=true;
+    case 1: { // erase to left
+      for (let col = 0; col < cur_x; ++col) {
+        if (line[col]) {
+          line[col].copyFromNewChar();
+          line[col].needUpdate = true;
+        }
       }
       break;
-    case 2: //erase all
-      for (var col = 0; col < cols; ++col) {
-        line[col].copyFromNewChar();
-        line[col].needUpdate = true;
+    }
+    case 2: // erase all
+      for (let col = 0; col < cols; ++col) {
+        if (line[col]) {
+          line[col].copyFromNewChar();
+          line[col].needUpdate = true;
+        }
       }
       break;
     default:
@@ -665,261 +1076,506 @@ TermBuf.prototype = {
     }
     this.changed = true;
     this.queueUpdate();
-  },
+  }
 
-  deleteLine: function(param) {
-    var scrollStart = this.scrollStart;
-    this.scrollStart = this.cur_y;
-    this.scroll(false, param);
+  /**
+   * @param {number} [param]
+   */
+  deleteLine(param) {
+    const scrollStart = (typeof this.scrollStart === 'number' && Number.isFinite(this.scrollStart)) ? Math.floor(this.scrollStart) : 0;
+    const scrollEnd = (typeof this.scrollEnd === 'number' && Number.isFinite(this.scrollEnd)) ? Math.floor(this.scrollEnd) : this.rows - 1;
+    if (this.cur_y < scrollStart || this.cur_y > scrollEnd) return;
+    const p = (typeof param === 'number' && Number.isFinite(param) && param > 0) ? Math.floor(param) : 1;
+    this.scrollStart = Math.max(0, Math.min(this.rows - 1, (typeof this.cur_y === 'number' && Number.isFinite(this.cur_y)) ? Math.floor(this.cur_y) : 0));
+    this.scroll(false, p);
     this.scrollStart = scrollStart;
     this.changed = true;
     this.queueUpdate();
-  },
+  }
 
-  insertLine: function(param) {
-    var scrollStart = this.scrollStart;
-    if (this.cur_y < this.scrollEnd) {
-      this.scrollStart=this.cur_y;
-      this.scroll(true, param);
-    }
+  /**
+   * @param {number} [param]
+   */
+  insertLine(param) {
+    const scrollStart = (typeof this.scrollStart === 'number' && Number.isFinite(this.scrollStart)) ? Math.floor(this.scrollStart) : 0;
+    const scrollEnd = (typeof this.scrollEnd === 'number' && Number.isFinite(this.scrollEnd)) ? Math.floor(this.scrollEnd) : this.rows - 1;
+    if (this.cur_y < scrollStart || this.cur_y > scrollEnd) return;
+    const p = (typeof param === 'number' && Number.isFinite(param) && param > 0) ? Math.floor(param) : 1;
+    this.scrollStart = Math.max(0, Math.min(this.rows - 1, (typeof this.cur_y === 'number' && Number.isFinite(this.cur_y)) ? Math.floor(this.cur_y) : 0));
+    this.scroll(true, p);
     this.scrollStart = scrollStart;
     this.changed = true;
     this.queueUpdate();
-  },
+  }
 
-  scroll: function(up, n) {
-    var scrollStart=this.scrollStart;
-    var scrollEnd=this.scrollEnd;
-    if(scrollEnd<=scrollStart) {
-      scrollStart=0;
-      if(scrollEnd<1) scrollEnd=this.rows-1;
+  /**
+   * @param {boolean} up
+   * @param {number} [n]
+   */
+  scroll(up, n) {
+    let scrollStart = (typeof this.scrollStart === 'number' && Number.isFinite(this.scrollStart)) ? Math.floor(this.scrollStart) : 0;
+    let scrollEnd = (typeof this.scrollEnd === 'number' && Number.isFinite(this.scrollEnd)) ? Math.floor(this.scrollEnd) : this.rows - 1;
+    if (scrollEnd <= scrollStart) {
+      scrollStart = 0;
+      if (scrollEnd < 1) scrollEnd = this.rows - 1;
     }
-    if(n>=this.rows) // scroll more than 1 page = clear
+    scrollStart = Math.max(0, Math.min(this.rows - 1, scrollStart));
+    scrollEnd = Math.max(0, Math.min(this.rows - 1, scrollEnd));
+    let count = (typeof n === 'number' && Number.isFinite(n) && n > 0) ? Math.floor(n) : 1;
+    const regionHeight = scrollEnd - scrollStart + 1;
+    if (scrollStart === 0 && scrollEnd === this.rows - 1 && count >= this.rows) { // scroll full screen by >= rows = clear
       this.clear(2);
-    else if(n >= scrollEnd-scrollStart+1) {
-      var lines = this.lines;
-      var cols = this.cols;
-      for(var row=scrollStart; row <= scrollEnd; ++row) {
-        for(var col=0; col< cols; ++col) {
-          lines[row][col].copyFromNewChar();
-          lines[row][col].needUpdate=true;
+      return;
+    } else if (count >= regionHeight) {
+      const lines = this.lines;
+      const cols = this.cols;
+      for (let row = scrollStart; row <= scrollEnd; ++row) {
+        if (this.lineChangeds) this.lineChangeds[row] = true;
+        const line = lines[row];
+        if (line) {
+          for (let col = 0; col < cols; ++col) {
+            if (line[col]) {
+              line[col].copyFromNewChar();
+              line[col].needUpdate = true;
+            }
+          }
         }
       }
     } else {
-      var lines = this.lines;
-      var rows = this.rows;
-      var cols = this.cols;
+      const lines = this.lines;
+      const cols = this.cols;
 
-      if (up) { // move lines down
-        for (var i = 0; i < rows-1-scrollEnd; ++i)
-          lines.unshift(lines.pop());
-        while (--n >= 0) {
-          var line = lines.pop();
-          lines.splice(rows-1-scrollEnd+scrollStart, 0, line);
-          for (var col = 0; col < cols; ++col)
-            line[col].copyFromNewChar();
+      if (up) { // move lines down (insert blank lines at scrollStart)
+        const removed = lines.splice(scrollEnd - count + 1, count);
+        for (const line of removed) {
+          if (line) {
+            for (let col = 0; col < cols; ++col) {
+              if (line[col]) line[col].copyFromNewChar();
+            }
+          }
         }
-        for (var i = 0; i < rows-1-scrollEnd; ++i)
-          lines.push(lines.shift());
-      } else { // move lines up
-        for (var i = 0; i < scrollStart; ++i)
-          lines.push(lines.shift());
-        while (--n >= 0) {
-          var line = lines.shift();
-          lines.splice(scrollEnd-scrollStart, 0, line);
-          for (var col = 0; col < cols; ++col) // clear the line
-            line[col].copyFromNewChar();
+        lines.splice(scrollStart, 0, ...removed);
+      } else { // move lines up (insert blank lines at scrollEnd)
+        const removed = lines.splice(scrollStart, count);
+        for (const line of removed) {
+          if (line) {
+            for (let col = 0; col < cols; ++col) {
+              if (line[col]) line[col].copyFromNewChar();
+            }
+          }
         }
-        for (var i = 0; i < scrollStart; ++i)
-          lines.unshift(lines.pop());
+        lines.splice(scrollEnd - count + 1, 0, ...removed);
       }
 
       // update the whole screen within scroll region
-      for (var row = scrollStart; row <= scrollEnd; ++row) {
-        var line = lines[row];
-        for (var col = 0; col < cols; ++col) {
-          line[col].needUpdate = true;
+      for (let row = scrollStart; row <= scrollEnd; ++row) {
+        if (this.lineChangeds) this.lineChangeds[row] = true;
+        const line = lines[row];
+        if (line) {
+          for (let col = 0; col < cols; ++col) {
+            if (line[col]) line[col].needUpdate = true;
+          }
         }
       }
     }
     this.changed = true;
     this.queueUpdate();
-  },
+  }
 
-  gotoPos: function(x,y) {
-    // dump('gotoPos: ' + x + ', ' + y + '\n');
-    if (x >= this.cols) x = this.cols-1;
-    if (y >= this.rows) y = this.rows-1;
-    if (x < 0) x = 0;
-    if (y < 0) y = 0;
-    this.cur_x = x;
-    this.cur_y = y;
+  /**
+   * Set Top and Bottom Margins (DECSTBM).
+   * Pt (top) and Pb (bottom) are 1-based line numbers.
+   * If Pt is omitted or 0, it defaults to 1.
+   * If Pb is omitted or 0, it defaults to this.rows.
+   * Pt must be strictly less than Pb, with 1 <= Pt and Pb <= this.rows.
+   * On success, cursor is moved to the home position (0, 0).
+   * @param {number} [top=1] 1-based top line number
+   * @param {number} [bottom=this.rows] 1-based bottom line number
+   */
+  handleDECSTBM(top = 1, bottom = this.rows) {
+    const t = (typeof top === 'number' && Number.isFinite(top) && top > 0) ? Math.floor(top) : 1;
+    const b = (typeof bottom === 'number' && Number.isFinite(bottom) && bottom > 0) ? Math.floor(bottom) : this.rows;
+    if (t < b && t >= 1 && b <= this.rows) {
+      this.scrollStart = t - 1;
+      this.scrollEnd = b - 1;
+      this.gotoPos(0, 0);
+    }
+  }
+
+  /**
+   * Set scrolling region using 0-based row indices.
+   * @param {number} [top=0] 0-based top row index
+   * @param {number} [bottom=this.rows-1] 0-based bottom row index
+   */
+  setScrollRegion(top = 0, bottom = this.rows - 1) {
+    const t = (typeof top === 'number' && Number.isFinite(top) && top >= 0) ? Math.floor(top) + 1 : 1;
+    const b = (typeof bottom === 'number' && Number.isFinite(bottom) && bottom >= 0) ? Math.floor(bottom) + 1 : this.rows;
+    this.handleDECSTBM(t, b);
+  }
+
+  /**
+   * Reset scrolling region to full screen.
+   */
+  resetScrollRegion() {
+    this.scrollStart = 0;
+    this.scrollEnd = this.rows - 1;
+  }
+
+  /**
+   * Set explicit hyperlink (OSC 8).
+   * @param {string} [url] Target URL (empty string to close hyperlink)
+   * @param {string} [params] Optional parameters (e.g. id=xyz)
+   */
+  setHyperlink(url = '', params = '') {
+    if (!url || typeof url !== 'string') {
+      this.currentHyperlink = null;
+      return;
+    }
+    const trimmed = url.trim();
+    if (!trimmed || !/^https?:\/\/.+/i.test(trimmed)) {
+      this.currentHyperlink = null;
+      return;
+    }
+    let id = '';
+    if (typeof params === 'string' && params.length > 0) {
+      const match = params.match(/(?:^|:)id=([^:]*)/);
+      if (match) id = match[1];
+    }
+    this.currentHyperlink = { url: trimmed, id };
+  }
+
+  getHyperlink() {
+    return this.currentHyperlink;
+  }
+
+  /**
+   * @param {number} x
+   * @param {number} y
+   */
+  gotoPos(x, y) {
+    this.halfAttr = null;
+    const targetX = (typeof x === 'number' && Number.isFinite(x)) ? Math.floor(x) : 0;
+    const targetY = (typeof y === 'number' && Number.isFinite(y)) ? Math.floor(y) : 0;
+    this.cur_x = Math.max(0, Math.min(this.cols - 1, targetX));
+    this.cur_y = Math.max(0, Math.min(this.rows - 1, targetY));
     this.posChanged = true;
     this.queueUpdate();
-  },
+  }
 
-  carriageReturn: function() {
+  carriageReturn() {
+    this.halfAttr = null;
     this.cur_x = 0;
     this.posChanged = true;
     this.queueUpdate();
-  },
+  }
 
-  lineFeed: function() {
-    if (this.cur_y < this.scrollEnd) {
+  lineFeed() {
+    if (!Number.isFinite(this.cur_y) || this.cur_y < 0) this.cur_y = 0;
+    const scrollEnd = (typeof this.scrollEnd === 'number' && Number.isFinite(this.scrollEnd)) ? Math.floor(this.scrollEnd) : this.rows - 1;
+    if (this.cur_y === scrollEnd) {
+      this.scroll(false, 1);
+    } else if (this.cur_y < this.rows - 1) {
       ++this.cur_y;
       this.posChanged = true;
       this.queueUpdate();
-    } else { // at bottom of screen
-      this.scroll(false, 1);
     }
-  },
+  }
 
-  queueUpdate: function(directupdate) {
-    if (this.timerUpdate)
+  reverseLineFeed() {
+    if (!Number.isFinite(this.cur_y) || this.cur_y < 0) this.cur_y = 0;
+    const scrollStart = (typeof this.scrollStart === 'number' && Number.isFinite(this.scrollStart)) ? Math.floor(this.scrollStart) : 0;
+    if (this.cur_y === scrollStart) {
+      this.scroll(true, 1);
+    } else if (this.cur_y > 0) {
+      --this.cur_y;
+      this.posChanged = true;
+      this.queueUpdate();
+    }
+  }
+
+  isFrameReady() {
+    if (this.hasFrameSync) {
+      return !this.inSyncUpdate;
+    }
+    return this.site.isCursorParked(this);
+  }
+
+  beginSyncUpdate() {
+    this.inSyncUpdate = true;
+    this.hasFrameSync = true;
+    if (this.animFrameId !== null) {
+      if (typeof cancelAnimationFrame === 'function') {
+        cancelAnimationFrame(this.animFrameId);
+      }
+      this.animFrameId = null;
+    }
+    if (this.timerUpdate !== null) {
+      clearTimeout(this.timerUpdate);
+      this.timerUpdate = null;
+    }
+    if (this._syncUpdateTimeout !== null) {
+      clearTimeout(this._syncUpdateTimeout);
+    }
+    this._syncUpdateTimeout = setTimeout(() => {
+      this._syncUpdateTimeout = null;
+      if (this.inSyncUpdate) {
+        this.endSyncUpdate();
+      }
+    }, 1000);
+  }
+
+  endSyncUpdate() {
+    if (this._syncUpdateTimeout !== null) {
+      clearTimeout(this._syncUpdateTimeout);
+      this._syncUpdateTimeout = null;
+    }
+    this.inSyncUpdate = false;
+    this.hasFrameSync = true;
+    this.emit('frame');
+    if (this.changed || this.posChanged) {
+      this.queueUpdate();
+    }
+  }
+
+  handleDECSET(mode) {
+    if (mode === 7) {
+      this.autoWrap = true;
+      return;
+    }
+    this.locator?.handleDECSET(mode);
+  }
+
+  handleDECRST(mode) {
+    if (mode === 7) {
+      this.autoWrap = false;
+      return;
+    }
+    this.locator?.handleDECRST(mode);
+  }
+
+  queueBlink() {
+    this.blinkPending = true;
+    this.queueUpdate(true);
+  }
+
+  queueUpdate(directupdate) {
+    if (this.inSyncUpdate) {
+      return;
+    }
+    if (this.animFrameId !== null || this.timerUpdate !== null)
       return;
 
-    var _this = this;
-    var func = function() {
-      _this.notify();
+    const func = () => {
+      this.animFrameId = null;
+      this.timerUpdate = null;
+      if (this.inSyncUpdate) {
+        return;
+      }
+      this.notify();
     };
-    if (directupdate)
-      this.timerUpdate = setTimeout(func, 1);
-    else
-      this.timerUpdate = setTimeout(func, 30);
-  },
 
-  notify: function(timer) {
-    clearTimeout(this.timerUpdate);
-    this.timerUpdate = null;
+    if (typeof requestAnimationFrame === 'function') {
+      this.animFrameId = requestAnimationFrame(func);
+    } else {
+      this.timerUpdate = setTimeout(func, directupdate ? 1 : 16);
+    }
+  }
+
+  notify(timer) {
+    if (this.animFrameId !== null) {
+      if (typeof cancelAnimationFrame === 'function') {
+        cancelAnimationFrame(this.animFrameId);
+      }
+      this.animFrameId = null;
+    }
+    if (this.timerUpdate !== null) {
+      clearTimeout(this.timerUpdate);
+      this.timerUpdate = null;
+    }
 
     if (this.changed) { // content changed
       this.updateCharAttr();
 
       this.setPageState();
-      if (this.useMouseBrowsing) {
-        // clear highlight and reset cursor on page change
-        // without the redraw being called here
-        this.clearHighlight();
-      }
 
-      this.dispatchEvent(new CustomEvent('change'));
-
-      if (this.view) {
-        this.view.update();
-      }
       this.changed = false;
-
-      this.dispatchEvent(new CustomEvent('viewUpdate'));
+      this.emit('change');
+      this.emit('viewUpdate');
     }
 
     if (this.posChanged) { // cursor pos changed
-      if (this.view) {
-        this.view.updateCursorPos();
-      }
-      this.posChanged=false;
+      this.posChanged = false;
+      this.emit('cursor-move');
     }
 
-    if (this.view.blinkOn) {
-      this.view.blinkOn = false;
-
-      document.body.classList.toggle('blink--active')
+    if (this.blinkPending) {
+      this.blinkPending = false;
+      this.emit('blink');
     }
-  },
+  }
 
-  getText: function(row, colStart, colEnd, color, isutf8, reset, lines) {
-    var text = '';
-    if (lines) {
-      text = lines[row];
+  /**
+   * @param {number} row
+   * @param {number} colStart
+   * @param {number} colEnd
+   * @param {boolean} [color]
+   * @param {boolean} [isutf8]
+   * @param {boolean} [reset]
+   * @param {TermChar[][]} [lines]
+   * @returns {string}
+   */
+  getText(row, colStart, colEnd, color, isutf8, reset, lines) {
+    const srcLines = Array.isArray(lines) ? lines : this.lines;
+    const maxRows = srcLines ? srcLines.length : this.rows;
+    if (typeof row !== 'number' || !Number.isFinite(row) || row < 0 || row >= maxRows) return '';
+    const text = srcLines[row];
+    if (!text) return '';
+
+    let start = (typeof colStart === 'number' && Number.isFinite(colStart)) ? Math.floor(colStart) : 0;
+    let end = (typeof colEnd === 'number' && Number.isFinite(colEnd)) ? Math.floor(colEnd) : this.cols;
+    start = Math.max(0, Math.min(this.cols, start));
+    end = Math.max(0, Math.min(this.cols, end));
+
+    if (start === this.cols) return '';
+
+    if (start > 0) {
+      if (text[start] && (text[start].isDBCSTrail || text[start].ch === '') && text[start - 1] && text[start - 1].isDBCSLead) start--;
+      else if (text[start] && !text[start].isDBCSLead && text[start - 1] && text[start - 1].isDBCSLead) start--;
     } else {
-      text = this.lines[row];
+      start = 0;
     }
-    // always start from leadByte, and end at second-byte of DBCS.
-    // Note: this might change colStart and colEnd. But currently we don't return these changes.
-    if (colStart == this.cols) return '';
 
-    if ( colStart > 0 ) {
-      if ( !text[colStart].isLeadByte && text[colStart-1].isLeadByte ) colStart--;
-    } else colStart = 0;
+    if (end > 0 && end < this.cols) {
+      if (text[end - 1] && text[end - 1].isDBCSLead) end++;
+    } else if (end >= this.cols) {
+      end = this.cols;
+    }
 
-    if ( colEnd > 0 ){
-      if ( text[colEnd-1].isLeadByte ) colEnd++;
-    } else colEnd = this.cols;
-
-    if (colStart >= colEnd) return '';
-
-    if (!this.view) return;
-
-    var charset = this.view.charset;
+    if (start >= end) return '';
 
     // generate texts with ansi color
     if (color) {
-      var output = this.ansiCmp(TermChar.newChar, text[colStart], reset);
-      for (var col = colStart; col < colEnd-1; ++col) {
-        if (isutf8 && text[col].isLeadByte && this.ansiCmp(text[col], text[col+1]))
-          output += this.ansiCmp(text[col], text[col+1]).replace(/m$/g, ';50m') + text[col].ch;
+      let output = this.ansiCmp(TermChar.newChar, text[start], reset);
+      for (let col = start; col < end - 1; ++col) {
+        if (!text[col] || !text[col + 1]) continue;
+        if (text[col].isDBCSLead && this.ansiCmp(text[col], text[col + 1]))
+          output += this.ansiCmp(text[col], text[col + 1]).replace(/^\x1b\[/, '\x1b[66;') + text[col].ch;
         else
-          output += text[col].ch + this.ansiCmp(text[col], text[col+1]);
+          output += text[col].ch + this.ansiCmp(text[col], text[col + 1]);
       }
-      output += text[colEnd-1].ch + this.ansiCmp(text[colEnd-1], TermChar.newChar);
-      return (isutf8 && charset != 'UTF-8' ? b2u(output) : output);
+      if (text[end - 1]) output += text[end - 1].ch + this.ansiCmp(text[end - 1], TermChar.newChar);
+      return output;
     }
 
-    text = text.slice(colStart, colEnd);
-    return text.map( function(c, col, line) {
-      if (!c.isLeadByte) {
-        if (col >=1 && line[col-1].isLeadByte) { // second byte of DBCS char
-          var prevC = line[col-1];
-          var b5 = prevC.ch + c.ch;
-          if ((this.view && this.view.charset == 'UTF-8') || b5.length == 1)
-            return b5;
-          else
-            return b2u(b5);
-        } else
-          return c.ch;
+    const sliced = text.slice(start, end);
+    return sliced.map((c) => {
+      if (!c) return ' ';
+      if (c.isDBCSTrail || c.ch === '') {
+        return '';
       }
+      return c.ch;
     }).join('');
-  },
+  }
 
-  getRowText: function(row, colStart, colEnd, lines) {
-
-    var text = '';
-    if (lines) {
-      text = lines[row];
+  /**
+   * @param {{ start: { row: number, col: number }, end: { row: number, col: number }, lines?: TermChar[][] }} selection
+   * @param {{ color?: boolean, isutf8?: boolean, reset?: boolean, lines?: TermChar[][] }} [options]
+   * @returns {string}
+   */
+  getSelectionText(selection, { color = false, isutf8 = true, reset = false, lines = undefined } = {}) {
+    if (!selection || !selection.start || !selection.end) return '';
+    const effectiveLines = lines || selection.lines;
+    let startRow = selection.start.row;
+    let startCol = selection.start.col;
+    let endRow = selection.end.row;
+    let endCol = selection.end.col;
+    if (endRow > startRow && endCol === 0) {
+      endRow -= 1;
+      endCol = this.cols;
+    }
+    let result = '';
+    if (startRow === endRow) {
+      result += this.getText(
+        startRow,
+        startCol,
+        endCol,
+        color,
+        isutf8,
+        reset,
+        effectiveLines
+      );
     } else {
-      text = this.lines[row];
-    }
-    // always start from leadByte, and end at second-byte of DBCS.
-    // Note: this might change colStart and colEnd. But currently we don't return these changes.
-    if ( colStart > 0 ){
-      if ( !text[colStart].isLeadByte && text[colStart-1].isLeadByte ) colStart--;
-    } else colStart = 0;
-
-    if ( colEnd < this.cols ){
-      if ( text[colEnd].isLeadByte ) colEnd++;
-    } else colEnd = this.cols;
-
-    text = text.slice(colStart, colEnd);
-    var charset = this.view.charset;
-    let that = this;
-    return text.map( function(c, col, line) {
-      if (!c.isLeadByte) {
-        if (col >= 1 && line[col-1].isLeadByte) { // second byte of DBCS char
-          var prevC = line[col-1];
-          var b5 = prevC.ch + c.ch;
-          if ((that.view && that.view.charset == 'UTF-8') || b5.length == 1)
-            return b5;
-          else
-            return b2u(b5);
-        } else
-          return c.ch;
+      for (let i = startRow; i <= endRow; ++i) {
+        let scol = 0;
+        let ecol = this.cols;
+        if (i === startRow) {
+          scol = startCol;
+        } else if (i === endRow) {
+          ecol = endCol;
+        }
+        result += this.getText(i, scol, ecol, color, isutf8, reset, effectiveLines);
+        if (i !== endRow) {
+          result += '\n';
+        }
       }
+    }
+    return result;
+  }
+
+  /**
+   * @param {number} row
+   * @param {number} colStart
+   * @param {number} colEnd
+   * @param {TermChar[][]} [lines]
+   * @returns {string}
+   */
+  getRowText(row, colStart, colEnd, lines) {
+    const srcLines = Array.isArray(lines) ? lines : this.lines;
+    const maxRows = srcLines ? srcLines.length : this.rows;
+    if (typeof row !== 'number' || !Number.isFinite(row) || row < 0 || row >= maxRows) return '';
+    const text = srcLines[row];
+    if (!text) return '';
+
+    let start = (typeof colStart === 'number' && Number.isFinite(colStart)) ? Math.floor(colStart) : 0;
+    let end = (typeof colEnd === 'number' && Number.isFinite(colEnd)) ? Math.floor(colEnd) : this.cols;
+    start = Math.max(0, Math.min(this.cols, start));
+    end = Math.max(0, Math.min(this.cols, end));
+
+    if (start > 0) {
+      if (text[start] && (text[start].isDBCSTrail || text[start].ch === '') && text[start - 1] && text[start - 1].isDBCSLead) start--;
+      else if (text[start] && !text[start].isDBCSLead && text[start - 1] && text[start - 1].isDBCSLead) start--;
+    } else {
+      start = 0;
+    }
+
+    if (end < this.cols) {
+      if (text[end] && (text[end].isDBCSTrail || text[end].ch === '') && text[end - 1] && text[end - 1].isDBCSLead) end++;
+    } else {
+      end = this.cols;
+    }
+
+    if (start >= end) return '';
+
+    const sliced = text.slice(start, end);
+    return sliced.map((c) => {
+      if (!c) return ' ';
+      if (c.isDBCSTrail || c.ch === '') {
+        return '';
+      }
+      return c.ch;
     }).join('');
+  }
 
-  },
-
-  ansiCmp: function(preChar, thisChar, forceReset) {
-    var text = '';
-    var reset = forceReset;
+  /**
+   * @param {TermChar} preChar
+   * @param {TermChar} thisChar
+   * @param {boolean} [forceReset]
+   * @returns {string}
+   */
+  ansiCmp(preChar, thisChar, forceReset) {
+    if (!preChar || !thisChar) return '';
+    let text = '';
+    let reset = forceReset;
     if ((preChar.bright && !thisChar.bright) ||
         (preChar.underLine && !thisChar.underLine) ||
         (preChar.blink && !thisChar.blink) ||
@@ -929,305 +1585,48 @@ TermBuf.prototype = {
     if ((reset || !preChar.underLine) && thisChar.underLine) text += '4;';
     if ((reset || !preChar.blink) && thisChar.blink) text += '5;';
     if ((reset || !preChar.invert) && thisChar.invert) text += '7;';
-    var DeFg = TermChar.defaultFg;
-    var DeBg = TermChar.defaultBg;
-    var thisFg = (thisChar.fg == -1) ? DeFg : thisChar.fg;
-    var preFg = (preChar.fg == -1) ? DeFg : preChar.fg;
-    var thisBg = (thisChar.bg == -1) ? DeBg : thisChar.bg;
-    var preBg = (preChar.bg == -1) ? DeBg : preChar.bg;
+    const DeFg = TermChar.defaultFg;
+    const DeBg = TermChar.defaultBg;
+    const thisFg = (thisChar.fg == -1) ? DeFg : thisChar.fg;
+    const preFg = (preChar.fg == -1) ? DeFg : preChar.fg;
+    const thisBg = (thisChar.bg == -1) ? DeBg : thisChar.bg;
+    const preBg = (preChar.bg == -1) ? DeBg : preChar.bg;
     if (reset ? (thisFg != DeFg) : (preFg != thisFg))
       text += '3' + thisFg + ';';
     if (reset ? (thisBg != DeBg) : (preBg != thisBg))
       text += '4' + thisBg + ';';
     if (!text) return '';
-    else return ('\x1b[' + text.substr(0,text.length-1) + 'm');
-  },
-
-  isFullWidth: function(str) {
-    var code = str.charCodeAt(0);
-    if (this.view.charset != 'UTF-8' || this.forceFullWidth) { // PTT support
-      if (code > 0x7f) return true;
-      else return false;
-    }
-    if ((code >= 0x1100 && code <= 0x115f) || 
-        (code >= 0x2329 && code <= 0x232a) || 
-        (code >= 0x2e80 && code <= 0x303e) || 
-        (code >= 0x3040 && code <= 0xa4cf) || 
-        (code >= 0xac00 && code <= 0xd7a3) || 
-        (code >= 0xf900 && code <= 0xfaff) || 
-        (code >= 0xfe30 && code <= 0xfe6f) || 
-        (code >= 0xff00 && code <= 0xff60) || 
-        (code >= 0xffe0 && code <= 0xffe6)) {
-      return true;
-    } else {
-      return false;
-    }
-  },
-
-  isTextWrappedRow: function(row) {
-    // determine whether it is wrapped by looking for the ending "\"
-    var rowText = this.getRowText(row, 0, this.cols);
-    var slashIndex = rowText.lastIndexOf('\\');
-    if (slashIndex > 0 ) {
-      var col = u2b(rowText.substr(0, slashIndex)).length;
-      if (col != 77 && col != 78) return false;
-      // check the color
-      var ch = this.lines[row][col];
-      if (ch.fg == 7 && ch.bg === 0 && ch.bright)
-        return true;
-    }
-    return false;
-  },
-
-  setPageState: function() {
-    let lastRowNum = this.rows - 1;
-    let cols = this.cols;
-    //this.pageState = 0; //NORMAL
-    var lastRowText = this.getRowText(lastRowNum, 0, cols);
-    if (lastRowText.indexOf('請按任意鍵繼續') > 0 || lastRowText.indexOf('請按 空白鍵 繼續') > 0) {
-      //console.log('pageState = 5 (PASS)');
-      this.pageState = 5; // some ansi drawing screen to pass
-      return;
-    }
-    if (lastRowText.indexOf(' 編輯文章  (^Z/F1)說明 (^P/^G)插入符號/範本 (^X/^Q)離開') === 0) {
-      this.pageState = 6;
-      return;
-    }
-    if (parseStatusRow(lastRowText)) {
-      this.pageState = 3; // READING
-      return;
-    }
-
-    var firstRowText = this.getRowText(0, 0, cols);
-
-    if ( this.isUnicolor(0, 0, 29) && this.isUnicolor(0, cols-20, cols-10) ) {
-      var main = firstRowText.indexOf('【主功能表】');
-      var classList = firstRowText.indexOf('【分類看板】');
-      var archiveList = firstRowText.indexOf('【精華文章】');
-      if (main === 0 || classList === 0 || archiveList === 0 ||
-        parseListRow(lastRowText)) {
-        //console.log('pageState = 1 (MENU)');
-        this.pageState = 1; // MENU
-      } else if (this.isUnicolor(2, 0, cols-10) && !this.isLineEmpty(1) && (this.cur_x < 19 || this.cur_y == lastRowNum)) {
-        //console.log('pageState = 2 (LIST)');
-        this.pageState = 2; // LIST
-      }
-    } else if ( this.isUnicolor(lastRowNum, 28, 53) && this.cur_y == lastRowNum && this.cur_x == cols-1) {
-      //console.log('pageState = 5 (PASS)');
-      this.pageState = 5; // some ansi drawing screen to pass
-    }
-    if (this.pageState != 1 && this.isLineEmpty(lastRowNum)) {
-      //console.log('pageState = 0 (NORMAL)');
-      this.pageState = 0;
-    }
-  },
-
-  isUnicolor: function(lineindex, start, end){
-    var lines = this.lines;
-    var line = lines[lineindex];
-    var clr = line[start].getBg();
-
-    // a dirty hacking, because of the difference between maple and firebird bbs.
-    for (var i = start; i < end; i++) {
-      var clr1 = line[i].getBg();
-      if (clr1 != clr || clr1 === 0)
-        return false;
-    }
-    return true;
-  },
-
-  isLineEmpty: function(iLine){
-    var rows = this.rows;
-    var lines = this.lines;
-    var line = lines[iLine];
-
-    for ( var col = 0; col < this.cols; col++ )
-      if ( line[col].ch != ' ' || line[col].getBg() )
-        return false;
-    return true;
-  },
-
-  onMouse_move: function(tcol, trow, doRefresh){
-    this.tempMouseCol = tcol;
-    this.tempMouseRow = trow;
-
-    if (this.nowHighlight != trow || doRefresh) {
-      this.clearHighlight();
-    }
-
-    let lastRowNum = this.rows - 1;
-    let cols = this.cols;
-
-    switch( this.pageState ) {
-    case 0: //NORMAL
-      //SetCursor(m_ArrowCursor);
-      //m_CursorState = 0;
-      this.mouseCursor = 0;
-      break;
-
-    case 4: //LIST
-      if (trow>1 && trow < lastRowNum-1) {              //m_pTermData->m_RowsPerPage-1
-        if ( tcol <= 6 ) {
-          this.clearHighlight();
-          this.mouseCursor = 1;
-          //SetCursor(m_ExitCursor);m_CursorState=1;
-        } else if ( tcol >= cols-16 ) {            //m_pTermData->m_ColsPerPage-16
-          this.clearHighlight();
-          if ( trow > (lastRowNum + 1) / 2 )
-            this.mouseCursor = 3;
-          else
-            this.mouseCursor = 2;
-        } else {
-          if (!this.isLineEmpty(trow)) {
-            this.mouseCursor = 6;
-            this.nowHighlight = trow;
-          } else {
-            this.mouseCursor = 11;
-          }
-        }
-      } else if ( trow == 1 || trow == 2 ) {
-        this.mouseCursor = 2;
-      } else if ( trow === 0 ) {
-        this.mouseCursor = 4;
-      } else { // if ( trow == 23)
-        this.mouseCursor = 5;
-      }
-      break;
-
-    case 2: //LIST
-      if (trow > 2 && trow < lastRowNum) {              //m_pTermData->m_RowsPerPage-1
-        if ( tcol <= 6 ) {
-          this.clearHighlight();
-          this.mouseCursor = 1;
-          //SetCursor(m_ExitCursor);m_CursorState=1;
-        } else if ( tcol >= cols-16 ) {            //m_pTermData->m_ColsPerPage-16
-          this.clearHighlight();
-          if ( trow >  (lastRowNum + 1) / 2 )
-            this.mouseCursor = 3;
-          else
-            this.mouseCursor = 2;
-        } else {
-          if (!this.isLineEmpty(trow)) {
-            this.mouseCursor = 6;
-            this.nowHighlight = trow;
-          } else {
-            this.mouseCursor = 11;
-          }
-        }
-      } else if ( trow == 1 || trow == 2 ) {
-        if ( tcol < 2 )//[
-          this.mouseCursor = 8;
-        else if ( tcol > cols-5 )//]
-          this.mouseCursor = 9;
-        else
-          this.mouseCursor = 2;
-      } else if ( trow === 0 ) {
-        if ( tcol < 2 )//=
-          this.mouseCursor = 10;
-        else if ( tcol > cols-5 )//]
-          this.mouseCursor = 9;
-        else
-          this.mouseCursor = 4;
-      } else { // if ( trow == 23)
-        if ( tcol < 2 )
-          this.mouseCursor = 12;
-        else if ( tcol > cols-5 )
-          this.mouseCursor = 13;
-        else
-          this.mouseCursor = 5;
-      }
-      break;
-
-    case 3: //READING
-      if ( trow == lastRowNum) {
-        if ( tcol < 2 )//]
-          this.mouseCursor = 12;
-        else if ( tcol > cols-5 )
-          this.mouseCursor = 14;
-        else
-          this.mouseCursor = 5;
-      } else if ( trow === 0) {
-        if (tcol < 2)//=
-          this.mouseCursor = 10;
-        else if ( tcol > cols-5 )//]
-          this.mouseCursor = 9;
-        else if ( tcol < 7 )
-          this.mouseCursor = 1;
-        else
-          this.mouseCursor = 2;
-      } else if ( trow == 1 || trow == 2) {
-        if (tcol < 2)//[
-          this.mouseCursor = 8;
-        else if ( tcol > cols-5 )//]
-          this.mouseCursor = 9;
-        else if ( tcol < 7 )
-          this.mouseCursor = 1;
-        else
-          this.mouseCursor = 2;
-      } else if ( tcol < 7 )
-        this.mouseCursor = 1;
-      else if ( trow < 12)
-        this.mouseCursor = 2;
-      else
-        this.mouseCursor = 3;
-      break;
-
-    case 1: //MENU
-      if ( trow>0 && trow < lastRowNum ) {
-        if (tcol > 7)
-          this.mouseCursor = 7;
-        else
-          this.mouseCursor = 1;
-      } else {
-        this.mouseCursor = 0;
-        //SetCursor(m_ArrowCursor);m_CursorState=0;
-      }
-      break;
-
-    default:
-      this.mouseCursor = 0;
-      break;
-    }
-
-    this.BBSWin.style.cursor = mouseCursorMap[this.mouseCursor];
-  },
-
-  resetMousePos: function() {
-    if (this.useMouseBrowsing) {
-      this.onMouse_move(this.tempMouseCol, this.tempMouseRow, true);
-    }
-  },
-
-  setHighlight: function(row) {
-    this._nowHighlight = row;
-    this.view.setHighlightedRow(row);
-  },
-
-  clearHighlight: function(){
-    this.nowHighlight = -1;
-    this.mouseCursor = 0;
-  },
-
-  setTitle: function(part) {
-    if (part) {
-      if (part.site !== undefined) {
-        this.titleSite = part.site;
-      }
-      if (part.conn !== undefined) {
-        this.titleConn = part.conn;
-      }
-    }
-    let title = this.titleBase;
-    if (this.dynamicTitle) {
-      if (this.titleSite) {
-        title += ' - ' + this.titleSite;
-      }
-      if (this.titleConn) {
-        title += ' - ' + this.titleConn;
-      }
-    }
-    document.title = this.title = title;
+    else return ('\x1b[' + text.slice(0, -1) + 'm');
   }
-};
 
-Event.mixin(TermBuf.prototype);
+  setPageState() {
+    if (this.site) {
+      return this.site.setPageState(this);
+    }
+  }
+
+  /**
+   * @param {number} iLine
+   * @returns {boolean}
+   */
+  isLineEmpty(iLine) {
+    if (typeof iLine !== 'number' || !Number.isFinite(iLine) || iLine < 0 || iLine >= this.rows) return true;
+    const lines = this.lines;
+    const line = lines[iLine];
+    if (!line) return true;
+
+    for (let col = 0; col < this.cols; col++) {
+      const ch = line[col];
+      if (ch && (ch.ch != ' ' || ch.getBg()))
+        return false;
+    }
+    return true;
+  }
+
+  /**
+   * @param {{ site?: string, conn?: string }} [part]
+   */
+  setTitle(part) {
+    this.emit('title', part);
+  }
+}

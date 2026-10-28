@@ -4,6 +4,6 @@
   "version": "6.2.1",
   "license": "MIT",
   "included": ["src/term.js", "src/shared", "LICENSE"],
-  "integration": "Bundled into the classic extension tab. Imgur header rules are recreated with this extension's initiator scope.",
+  "integration": "Version 0.2.0 bundles shared/media.js, shared/imgur.js, and shared/embed.js through a native ptt-term plugin adapter. The older DOM observer and element/previewer modules remain as historical source but are not bundled. Header rules retain this extension's initiator scope.",
   "local_changes": ["term.js opens Twitch clips in a new tab because Twitch's frame-ancestors policy excludes chrome-extension origins."]
 }

@@ -1,0 +1,10 @@
+.ptt-inline-media { min-height: 24px; white-space: normal; }
+.ptt-inline-media img, .ptt-inline-video { display: block; max-width: 100%; max-height: 80vh; }
+.ptt-inline-youtube { display: block; width: min(100%, 800px); aspect-ratio: 16 / 9; border: 0; }
+.ptt-media-fallback, .ptt-media-loading { display: block; padding: 8px 0; font: 16px sans-serif; }
+.image-preview-loaded, .image-preview-loaded img, .ptt-inline-media, .ptt-inline-media img {
+  border: 0 !important;
+  outline: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+}

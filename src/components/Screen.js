@@ -1,78 +1,80 @@
-// Modified for PTT Classic on 2026-09-14: avoid duplicate hover image loading.
-import Row from "./Row";
-import ImagePreviewer, {
-  of,
-  resolveSrcToImageUrl,
-  resolveWithImageDOM
-} from "./ImagePreviewer";
+import React from "react";
+import DOMScreen from "./Row/DOMScreen";
+import CanvasScreen from "./Canvas/CanvasScreen";
 
 export class Screen extends React.Component {
-  setCurrentHighlighted = currentHighlighted => {
-    this.setState({ currentHighlighted });
-  };
-
-  state = {
-    currentHighlighted: undefined,
-    currentImagePreview: undefined,
-    left: undefined,
-    top: undefined
-  };
-
-  componentWillReceiveProps(nextProps) {
-    if (this.props.lines !== nextProps.lines) {
-      this.setState({ currentImagePreview: undefined });
-    }
+  constructor(props) {
+    super(props);
+    this.implRef = React.createRef();
   }
 
-  handleMouseMove = ({ clientX, clientY }) => {
-    if (this.state.currentImagePreview) {
-      this.setState({
-        left: clientX,
-        top: clientY
-      });
+  setCurrentHighlighted = (currentHighlighted) => {
+    if (this.implRef.current) {
+      this.implRef.current.setCurrentHighlighted(currentHighlighted);
     }
   };
 
-  handleHyperLinkMouseOver = ({ currentTarget: { href } }) => {
-    if (this.props.enableLinkHoverPreview && !process.env.PTTCHROME_MEDIA_PREVIEW) {
-      this.setState({
-        currentImagePreview: of(href)
-          .then(resolveSrcToImageUrl)
-          .then(resolveWithImageDOM)
-      });
+  onBlink = () => {
+    if (this.implRef.current) {
+      this.implRef.current.onBlink();
     }
   };
 
-  handleHyperLinkMouseOut = () => {
-    this.setState({ currentImagePreview: undefined });
+  getSelectedText = () => {
+    if (this.implRef.current) {
+      return this.implRef.current.getSelectedText();
+    }
+    return "";
+  };
+
+  getSelectionColRow = () => {
+    if (this.implRef.current) {
+      return this.implRef.current.getSelectionColRow();
+    }
+    return null;
+  };
+
+  selectAll = () => {
+    if (this.implRef.current) {
+      this.implRef.current.selectAll();
+    }
+  };
+
+  startSelection = (coords) => {
+    if (this.implRef.current && this.implRef.current.startSelection) {
+      this.implRef.current.startSelection(coords);
+    }
+  };
+
+  updateSelection = (coords) => {
+    if (this.implRef.current && this.implRef.current.updateSelection) {
+      this.implRef.current.updateSelection(coords);
+    }
+  };
+
+  endSelection = () => {
+    if (this.implRef.current && this.implRef.current.endSelection) {
+      return this.implRef.current.endSelection();
+    }
+    return "";
+  };
+
+  clearSelection = () => {
+    if (this.implRef.current && this.implRef.current.clearSelection) {
+      this.implRef.current.clearSelection();
+    }
   };
 
   render() {
-    return (
-      <div id="mainContainer" onMouseMove={this.handleMouseMove}>
-        {this.props.lines.map((chars, row) => (
-          <Row
-            key={row}
-            chars={chars}
-            row={row}
-            forceWidth={this.props.forceWidth}
-            enableLinkInlinePreview={this.props.enableLinkInlinePreview}
-            highlighted={this.state.currentHighlighted === row}
-            onHyperLinkMouseOver={this.handleHyperLinkMouseOver}
-            onHyperLinkMouseOut={this.handleHyperLinkMouseOut}
-          />
-        ))}
-        {this.state.currentImagePreview && (
-          <ImagePreviewer
-            request={this.state.currentImagePreview}
-            component={ImagePreviewer.OnHover}
-            left={this.state.left}
-            top={this.state.top}
-          />
-        )}
-      </div>
-    );
+    if (this.props.useCanvas) {
+      return <CanvasScreen ref={this.implRef} {...this.props} />;
+    }
+    return <DOMScreen ref={this.implRef} {...this.props} />;
   }
 }
 
+export {
+  DOMScreen,
+  CanvasScreen,
+};
 export default Screen;

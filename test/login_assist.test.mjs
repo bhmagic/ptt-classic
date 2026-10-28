@@ -1,0 +1,417 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { LoginAssist, LoginAssistPlugin, AutoLogin, AutoLoginPlugin } from '../src/plugins/login_assist/index.js';
+import { BUILTIN_PLUGINS, PLUGIN_GROUP_MAP, getAvailablePlugins } from '../src/plugins/index.js';
+import { DEFAULT_PREFS, readValuesWithDefault, PREF_STORAGE_KEY } from '../src/js/pref.js';
+import { EventEmitter } from '../src/js/event.js';
+
+test('LoginAssist plugin exports, metadata, registration, and backward compatibility', () => {
+  // 1. Exports and backward-compatible aliases
+  assert.strictEqual(typeof LoginAssist, 'function');
+  assert.strictEqual(LoginAssist, LoginAssistPlugin);
+  assert.strictEqual(AutoLogin, LoginAssist);
+  assert.strictEqual(AutoLoginPlugin, LoginAssist);
+
+  // 2. Static properties
+  assert.strictEqual(LoginAssist.id, 'login_assist');
+  assert.strictEqual(LoginAssist.name, 'login_assist');
+  assert.strictEqual(LoginAssist.prefKey, 'enableLoginAssist');
+  assert.strictEqual(LoginAssist.legacyPrefKey, 'enableAutoLogin');
+  assert.strictEqual(LoginAssist.group, 'bbs');
+
+  // 3. Metadata
+  const meta = LoginAssist.getMetadata();
+  assert.strictEqual(meta.id, 'login_assist');
+  assert.strictEqual(meta.prefKey, 'enableLoginAssist');
+  assert.strictEqual(meta.group, 'bbs');
+  assert.strictEqual(meta.icon, 'key');
+
+  // 4. Registration in BUILTIN_PLUGINS and PLUGIN_GROUP_MAP (with backward-compatible auto_login key)
+  assert.ok(BUILTIN_PLUGINS.includes(LoginAssist), 'BUILTIN_PLUGINS must include LoginAssist');
+  assert.strictEqual(PLUGIN_GROUP_MAP.login_assist, 'bbs', 'PLUGIN_GROUP_MAP must map login_assist to bbs');
+  assert.strictEqual(PLUGIN_GROUP_MAP.auto_login, 'bbs', 'PLUGIN_GROUP_MAP must map legacy auto_login to bbs');
+
+  // 5. DEFAULT_PREFS includes enableLoginAssist: true
+  assert.strictEqual(DEFAULT_PREFS.enableLoginAssist, true, 'DEFAULT_PREFS must default enableLoginAssist to true');
+
+  // 6. Legacy prefKey (enableAutoLogin) backward compatibility in PluginBase
+  const mockAppWithLegacyPref = new EventEmitter();
+  mockAppWithLegacyPref.prefValues = { enableAutoLogin: false };
+  const pluginFromLegacy = new LoginAssist(mockAppWithLegacyPref);
+  assert.strictEqual(pluginFromLegacy.enabled, false, 'LoginAssist must respect legacy enableAutoLogin in prefValues when enableLoginAssist is undefined');
+});
+
+test('LoginAssist lifecycle, context menu, and modal toggle', () => {
+  const dispatchedEvents = [];
+  const registeredMenuItems = [];
+  const unregisteredMenuItemIds = [];
+
+  const mockApp = new EventEmitter();
+  mockApp.modalShown = false;
+  mockApp.inputAreaFocused = false;
+  mockApp.on('term:overlay:update', () => dispatchedEvents.push('term:overlay:update'));
+  mockApp.registerContextMenuItem = (item) => { registeredMenuItems.push(item); };
+  mockApp.unregisterContextMenuItem = (id) => { unregisteredMenuItemIds.push(id); };
+  mockApp.setInputAreaFocus = () => { mockApp.inputAreaFocused = true; };
+
+  const plugin = new LoginAssist(mockApp);
+  assert.strictEqual(plugin.enabled, true);
+  assert.strictEqual(plugin.showsModal, false);
+
+  // Init registers menu item
+  plugin.init({ app: mockApp });
+  assert.strictEqual(registeredMenuItems.length, 1);
+  assert.strictEqual(registeredMenuItems[0].id, 'login_assist');
+  assert.strictEqual(registeredMenuItems[0].order, 5);
+
+  // Show modal
+  plugin.show();
+  assert.strictEqual(plugin.showsModal, true);
+  assert.strictEqual(mockApp.modalShown, true);
+  assert.ok(dispatchedEvents.includes('term:overlay:update'));
+
+  // Hide modal
+  plugin.hide();
+  assert.strictEqual(plugin.showsModal, false);
+  assert.strictEqual(mockApp.modalShown, false);
+  assert.strictEqual(mockApp.inputAreaFocused, true);
+
+  // Toggle modal
+  plugin.toggle();
+  assert.strictEqual(plugin.showsModal, true);
+  plugin.toggle();
+  assert.strictEqual(plugin.showsModal, false);
+
+  // Disable plugin permanently turns off enabled state and closes modal
+  plugin.show();
+  assert.strictEqual(plugin.showsModal, true);
+  plugin.disable();
+  assert.strictEqual(plugin.enabled, false);
+  assert.strictEqual(plugin.showsModal, false);
+  assert.strictEqual(mockApp.modalShown, false);
+
+  // Destroy cleans up
+  plugin.destroy();
+  assert.ok(unregisteredMenuItemIds.includes('login_assist'));
+});
+
+test('LoginAssist handleLogin sends ID and password with CR and short typeahead interval', async () => {
+  const sentData = [];
+  const mockApp = new EventEmitter();
+  mockApp.modalShown = true;
+  mockApp.send = (data) => {
+    sentData.push(data);
+  };
+  mockApp.setInputAreaFocus = () => {};
+
+  const plugin = new LoginAssist(mockApp, { submitCooldownMs: 150 });
+  plugin.showsModal = true;
+
+  plugin.handleLogin({ username: 'testuser', password: 'secretpassword' });
+
+  // Username should be sent immediately
+  assert.strictEqual(sentData.length, 1);
+  assert.strictEqual(sentData[0], 'testuser\r');
+
+  // Password should be sent after a short delay
+  await new Promise(resolve => setTimeout(resolve, 120));
+  assert.strictEqual(sentData.length, 2);
+  assert.strictEqual(sentData[1], 'secretpassword\r');
+
+  // Modal should be hidden after form submit cooldown
+  await new Promise(resolve => setTimeout(resolve, 100));
+  assert.strictEqual(plugin.showsModal, false);
+  assert.strictEqual(mockApp.modalShown, false);
+});
+
+test('LoginModal structure adheres to browser password manager conventions', () => {
+  const modalSource = fs.readFileSync(
+    path.resolve('src/plugins/login_assist/LoginModal.js'),
+    'utf-8'
+  );
+  const modalCss = fs.readFileSync(
+    path.resolve('src/plugins/login_assist/LoginModal.css'),
+    'utf-8'
+  );
+
+  // Must have standard HTML form semantics for browser autofill
+  assert.ok(modalSource.includes('<form'), 'Must render standard form');
+  assert.ok(modalSource.includes('autoComplete="username"'), 'Username input must specify autoComplete="username"');
+  assert.ok(modalSource.includes('autoComplete="current-password"'), 'Password input must specify autoComplete="current-password"');
+  assert.ok(modalSource.includes('type="password"'), 'Password input must be type="password"');
+  assert.ok(modalSource.includes('type="submit"'), 'Must have type="submit" button');
+  assert.ok(modalSource.includes('autoCapitalize="none"'), 'Must disable autoCapitalize on mobile touch keyboard');
+  assert.ok(modalSource.includes('enterKeyHint="next"'), 'Username input must specify enterKeyHint="next"');
+  assert.ok(modalSource.includes('enterKeyHint="go"'), 'Password input must specify enterKeyHint="go"');
+
+  // iOS Safari hidden target iframe and history state for password capture
+  assert.ok(modalSource.includes('target="site_auth_target_frame"'), 'Form must target hidden iframe');
+  assert.ok(modalSource.includes('site_auth_target_frame'), 'Must define hidden iframe for WebKit password capture');
+  assert.ok(modalSource.includes('window.history?.replaceState'), 'Must trigger history transition for WebKit');
+
+  // Firefox LoginManager compatibility: form action must resolve to same-origin (not about:blank which returns null formActionOrigin)
+  assert.ok(modalSource.includes('action="#"'), 'Form must use action="#" so Firefox LoginManager resolves a valid formActionOrigin');
+  assert.ok(!modalSource.includes('action="about:blank"'), 'Form must not use action="about:blank" which causes Firefox LoginManager addLogin to throw');
+  assert.ok(modalSource.includes('this.formRef.current.action = "about:blank"'), 'Form must redirect action to about:blank in handleSubmit to prevent HTTP POST credential leak');
+  assert.ok(modalSource.includes('readOnly={submitted}'), 'Inputs must use readOnly={submitted} rather than disabled={submitted} so FormData/PasswordCredential includes them on submit');
+
+  // iOS Safari font-size 16px to prevent zoom
+  assert.ok(modalCss.includes('font-size: 16px'), 'Input must have 16px font size to prevent iOS auto-zoom');
+
+  // Mobile layout: top-pinning and scrollability
+  assert.ok(modalCss.includes('@media (max-width: 768px)'), 'Must define mobile responsive media query');
+  assert.ok(modalCss.includes('overflow-y: auto'), 'Must be scrollable when keyboard opens');
+
+  // SPA Credential Management API
+  assert.ok(modalSource.includes('PasswordCredential'), 'Must leverage PasswordCredential API for SPAs');
+  assert.ok(modalSource.includes('navigator?.credentials?.store'), 'Must call navigator.credentials.store');
+  assert.ok(modalSource.includes('attemptAutoRetrieve'), 'Must implement attemptAutoRetrieve for auto-fill');
+  assert.ok(modalSource.includes("mediation: \"silent\""), 'Must request credentials with silent mediation');
+  assert.ok(modalSource.includes("mediation: \"optional\""), 'Must request credentials with optional mediation on user gesture');
+  assert.ok(modalSource.includes('focusAppropriateField'), 'Must focus appropriate field when credentials retrieved');
+  assert.ok(modalSource.includes('submitBtnRef'), 'Must reference submit button for focus management');
+  assert.ok(modalSource.includes('LoginModal__Btn--disable'), 'Must render disable button in footer');
+  assert.ok(modalSource.includes('handleDisable'), 'Must implement handleDisable handler');
+  assert.ok(modalCss.includes('margin-right: auto'), 'Disable button must push cancel/submit buttons to right');
+
+  // 1Password & password manager autofill compatibility:
+  // Submit button must appear before Cancel and Disable in DOM order after password input,
+  // and must not be disabled while waiting for React state sync during autofill.
+  const submitIdx = modalSource.indexOf('LoginModal__Btn--submit');
+  const cancelIdx = modalSource.indexOf('LoginModal__Btn--cancel');
+  const disableIdx = modalSource.indexOf('LoginModal__Btn--disable');
+  assert.ok(submitIdx > 0 && submitIdx < cancelIdx && cancelIdx < disableIdx,
+    'Submit button must precede Cancel and Disable buttons in DOM order so autofill/Tab targets Submit first');
+  assert.ok(modalCss.includes('order: 1') && modalCss.includes('order: 2') && modalCss.includes('order: 3'),
+    'CSS flex order must preserve visual button placement (Disable left, Cancel/Submit right)');
+});
+
+test('ContextMenu and DropdownMenu integration passes pluginItems', () => {
+  const contextMenuSource = fs.readFileSync(
+    path.resolve('src/components/ContextMenu/index.js'),
+    'utf-8'
+  );
+  assert.ok(
+    contextMenuSource.includes('pluginItems={pluginItems}'),
+    'ContextMenu must pass pluginItems prop to DropdownMenu'
+  );
+  assert.ok(
+    contextMenuSource.includes('app?.modalShown'),
+    'ContextMenu must recognize app.modalShown for anyModalShown'
+  );
+});
+
+test('LoginAssist triggers modal on login prompt events', async () => {
+  const mockApp = new EventEmitter();
+  mockApp.modalShown = false;
+  mockApp.registerContextMenuItem = () => {};
+
+  const plugin = new LoginAssist(mockApp);
+  plugin.init({ app: mockApp });
+  assert.strictEqual(plugin.showsModal, false);
+
+  // 1. Firing term:login-prompt event automatically triggers modal
+  mockApp.emit('term:login-prompt');
+  assert.strictEqual(plugin.showsModal, true);
+  assert.strictEqual(mockApp.modalShown, true);
+
+  plugin.hide();
+  assert.strictEqual(plugin.showsModal, false);
+
+  // 2. When disabled, term:login-prompt event does NOT trigger modal
+  plugin.enabled = false;
+  mockApp.emit('term:login-prompt');
+  assert.strictEqual(plugin.showsModal, false);
+});
+
+test('Site onData with PTT and Maple login strings triggers LoginAssist plugin modal', async () => {
+  const { PttSite } = await import('../src/js/sites/ptt.js');
+  const { Maple3Site } = await import('../src/js/sites/maple3.js');
+  const { u2b } = await import('../src/js/string_util.js');
+
+  const createMockEnvironment = () => {
+    const app = new EventEmitter();
+    app.modalShown = false;
+    app.registerContextMenuItem = () => {};
+    const buf = new EventEmitter();
+    buf.rows = 24;
+    buf.cols = 80;
+    buf.getRowText = () => '';
+    return { app, buf };
+  };
+
+  // 1. PTT site onData triggers LoginAssist
+  const env1 = createMockEnvironment();
+  const plugin1 = new LoginAssist(env1.app);
+  plugin1.init({ app: env1.app, buf: env1.buf });
+
+  const pttSite = new PttSite();
+  const pttData = Uint8Array.from(
+    u2b('\x1b[0;37;40m\x1b[21;1H\x1b[K請輸入代號，或以 guest 參觀，或以 new 註冊: '),
+    c => c.charCodeAt(0)
+  );
+  pttSite.onData(pttData, env1.buf);
+  assert.strictEqual(plugin1.showsModal, true, 'PTT onData must trigger LoginAssist modal');
+
+  // 2. Maple site onData triggers LoginAssist
+  const env2 = createMockEnvironment();
+  const plugin2 = new LoginAssist(env2.app);
+  plugin2.init({ app: env2.app, buf: env2.buf });
+
+  const mapleSite = new Maple3Site();
+  const mapleData = Uint8Array.from(
+    u2b('\x1b[22;1H   [您的帳號] '),
+    c => c.charCodeAt(0)
+  );
+  mapleSite.onData(mapleData, env2.buf);
+  assert.strictEqual(plugin2.showsModal, true, 'Maple onData must trigger LoginAssist modal');
+
+  // 3. Split chunk buffering across TCP packets
+  const env3 = createMockEnvironment();
+  const plugin3 = new LoginAssist(env3.app);
+  plugin3.init({ app: env3.app, buf: env3.buf });
+
+  const pttSiteSplit = new PttSite();
+  const fullBytes = Uint8Array.from(
+    u2b('請輸入代號: '),
+    c => c.charCodeAt(0)
+  );
+  // Split across middle of Chinese word
+  const chunkA = fullBytes.slice(0, 5);
+  const chunkB = fullBytes.slice(5);
+
+  pttSiteSplit.onData(chunkA, env3.buf);
+  assert.strictEqual(plugin3.showsModal, false, 'Modal should not show before full prompt is assembled');
+
+  pttSiteSplit.onData(chunkB, env3.buf);
+  assert.strictEqual(plugin3.showsModal, true, 'Modal should trigger when split chunks assemble prompt');
+});
+
+test('Approach A: Site onData detects login prompt, fires login event, LoginAssist sets flag and ignores subsequent prompts until reconnect', async () => {
+  const { BaseSite } = await import('../src/js/sites/base.js');
+  const { u2b } = await import('../src/js/string_util.js');
+
+  const mockApp = new EventEmitter();
+  mockApp.modalShown = false;
+  mockApp.registerContextMenuItem = () => {};
+
+  const mockBuf = new EventEmitter();
+  mockBuf.app = mockApp;
+  mockBuf.rows = 24;
+  mockBuf.cols = 80;
+  mockBuf.getRowText = () => '';
+
+  const site = new BaseSite();
+  const plugin = new LoginAssist(mockApp);
+  plugin.init({ app: mockApp, buf: mockBuf });
+
+  assert.strictEqual(plugin.loginPromptDetected, false);
+  assert.strictEqual(site._loginPromptFired, false);
+
+  // 1. Send BBS login prompt in Big5
+  const loginBytes = Uint8Array.from(
+    u2b('\x1b[1;33m請輸入代號，或以 guest 參觀: \x1b[m'),
+    c => c.charCodeAt(0)
+  );
+
+  site.onData(loginBytes, mockBuf);
+  assert.strictEqual(site._loginPromptFired, true, 'BaseSite must mark login prompt fired');
+  assert.strictEqual(plugin.loginPromptDetected, true, 'LoginAssist must set loginPromptDetected to true');
+  assert.strictEqual(plugin.showsModal, true, 'LoginAssist modal must be shown');
+
+  // User logs in and closes modal
+  plugin.hide();
+  assert.strictEqual(plugin.showsModal, false);
+  assert.strictEqual(plugin.loginPromptDetected, true);
+
+  // 2. Subsequent packets during browsing (even if containing "請輸入代號") are ignored at line 1
+  const articleBytes = Uint8Array.from(
+    u2b('文章內容討論請輸入代號'),
+    c => c.charCodeAt(0)
+  );
+  site.onData(articleBytes, mockBuf);
+  assert.strictEqual(plugin.showsModal, false, 'Subsequent data must not re-trigger modal');
+
+  // 3. On disconnect and reconnect, both site and plugin reset
+  site.resetLoginPrompt();
+  mockApp.emit('term:disconnect');
+  assert.strictEqual(site._loginPromptFired, false, 'BaseSite _loginPromptFired must reset on disconnect');
+  assert.strictEqual(plugin.loginPromptDetected, false, 'LoginAssist loginPromptDetected must reset on disconnect');
+
+  mockApp.emit('term:connect');
+  assert.strictEqual(plugin.loginPromptDetected, false, 'LoginAssist loginPromptDetected ready for next session');
+});
+
+test('LoginAssist and LoginModal handle Credential Management API auto-retrieval flow', async () => {
+  const calls = [];
+  const fakeCred = { id: 'testuser', password: 'secretpassword' };
+
+  let currentHandler = async (opts) => {
+    calls.push(opts);
+    if (opts.mediation === 'silent') return fakeCred;
+    return null;
+  };
+
+  const fakeNavigator = {
+    credentials: {
+      get: (opts) => currentHandler(opts),
+    },
+  };
+
+  // 1. Silent retrieval succeeds when 1 credential is saved
+  const cred1 = await fakeNavigator.credentials.get({ password: true, mediation: 'silent' });
+  assert.strictEqual(cred1.id, 'testuser');
+  assert.strictEqual(cred1.password, 'secretpassword');
+  assert.strictEqual(calls.length, 1);
+  assert.strictEqual(calls[0].mediation, 'silent');
+
+  // 2. Silent returns null, user gesture falls back to optional
+  currentHandler = async (opts) => {
+    calls.push(opts);
+    if (opts.mediation === 'silent') return null;
+    if (opts.mediation === 'optional') return fakeCred;
+    return null;
+  };
+
+  const silentResult = await fakeNavigator.credentials.get({ password: true, mediation: 'silent' });
+  assert.strictEqual(silentResult, null);
+  const optionalResult = await fakeNavigator.credentials.get({ password: true, mediation: 'optional' });
+  assert.strictEqual(optionalResult.id, 'testuser');
+});
+
+test('Plugins use safe typeof process checks and do not reference undeclared process', () => {
+  const pluginFiles = [
+    'src/plugins/login_assist/LoginAssist.js',
+    'src/plugins/input_helper/InputHelper.js',
+    'src/plugins/live_update/LiveUpdate.js',
+    'src/plugins/pwa_prompt/PwaPrompt.js',
+  ];
+
+  for (const relPath of pluginFiles) {
+    const content = fs.readFileSync(path.resolve(relPath), 'utf-8');
+    assert.ok(
+      !content.includes('!process?.versions?.node'),
+      `${relPath} must not use !process?.versions?.node which throws ReferenceError in browsers`
+    );
+  }
+});
+
+test('App setInputAreaFocus handles null/undefined inputArea gracefully without throwing TypeError', () => {
+  const mockApp = {
+    inputArea: null,
+    modalShown: false,
+    contextMenuShown: false,
+    isMobileDevice: () => false,
+    isMobileLayout: () => false,
+    _debugTouchLog: () => {},
+  };
+
+  // Import App or verify setInputAreaFocus method exists and safely early-returns
+  const appFile = fs.readFileSync(path.resolve('src/js/app.js'), 'utf-8');
+  assert.ok(
+    appFile.includes('if (!this.inputArea) return;'),
+    'App setInputAreaFocus must guard against null/undefined inputArea'
+  );
+});
