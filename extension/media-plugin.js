@@ -38,8 +38,8 @@ function ImageSizeOptions({ values = {}, handleValueChange }) {
         }));
     }),
     h('p', { id: 'ptt-image-size-help' }, chinese
-      ? '以視窗尺寸的百分比設定，同時套用至文章內圖片與滑鼠預覽。保留圖片比例，小圖不放大。關閉設定後套用。'
-      : 'Percent of the window size, shared by inline and hover images. Proportions stay intact; small images are not enlarged. Applied when settings close.'));
+      ? '以視窗尺寸的百分比設定，文章內圖片、YouTube 影片與滑鼠圖片預覽共用上限。只縮小超過上限的圖片，保留比例，不放大填滿上限。關閉設定後套用。'
+      : 'Percent of the window size, shared by inline images, YouTube videos and hover images. Only oversized images shrink, keeping their proportions; smaller images stay at their natural size. Applied when settings close.'));
 }
 
 function SizedHoverImage(props) {
@@ -122,7 +122,8 @@ function InlineImage({ sources, href }) {
   const [index, setIndex] = useState(0);
   if (index >= sources.length) return h(OpenMedia, { href });
   return h('img', {
-    src: sources[index], className: 'easyReadingImg hyperLinkPreview', loading: 'lazy',
+    // Inline images use their intrinsic size and CSS limits, without terminal scaling.
+    src: sources[index], className: 'easyReadingImg', loading: 'lazy',
     referrerPolicy: sources[index].startsWith('https://i.verb.tw/') ? undefined : 'no-referrer',
     onError: () => setIndex(value => value + 1),
   });

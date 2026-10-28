@@ -1,4 +1,4 @@
-# PTT Classic 0.2.1 for Chrome
+# PTT Classic 0.2.2 for Chrome
 
 A local Manifest V3 extension powered by ptt-term 3.0.3 at production commit `ba7c00d5edff1654bf3cc89994b9dd2d23a072fe`. Source: [bhmagic/ptt-classic](https://github.com/bhmagic/ptt-classic). This is an independent community build.
 
@@ -12,7 +12,9 @@ The fixed public key preserves ID `gpephnjkgejlfddpjkgkeiffflnnkekg` and the boo
 
 Hover over an image URL for a floating preview. In Settings → Add-ons, enable Easy Reading (好讀模式) to show inline images, Imgur albums, animated Imgur media, and YouTube videos in articles. Extensionless meee.com.tw image links try the available image formats. Image requests and API resolution start when relevant content is hovered or near the visible article area. Images have no extra white background, padding, or border. Twitch clips open in a new tab. Failed inline media offers an external link.
 
-Expand Image and Media Preview → Options under Settings → Add-ons for two size sliders: maximum display height and maximum display width. Each ranges from 10% to 100% of the window size; defaults are 80% height and 90% width. Both inline and hover images use these same saved values, applied when settings close. Images preserve their proportions and are never enlarged beyond their original dimensions. Inline images also stay within the article width. This changes display size only.
+Expand Image and Media Preview → Options under Settings → Add-ons for two size sliders: maximum display height and maximum display width. Each ranges from 10% to 100% of the window size; defaults are 80% height and 90% width. Both inline and hover images use these same saved values, applied when settings close. These are upper limits: oversized images shrink proportionally, and smaller images stay at their natural size instead of filling the limit. Inline images also stay within the article width and ignore the terminal's legacy preview scaling. This changes display size only.
+
+Inline YouTube players follow both sliders too and align to the center of the article. Their 16:9 shape and existing 800-pixel maximum width are preserved. Reducing either limit shrinks the player proportionally; changing limits does not recreate or reload it.
 
 The remaining add-ons are Media Preview, Input Helper, Easy Reading, Auto Wrap, and Anti-Idle. Virtual Keyboard, PWA Installation, Login Assist, Mouse Browsing, Live Update, and Developer Tools are removed from the active registry and settings.
 
