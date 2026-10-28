@@ -88,7 +88,7 @@ const result = await build({
         }
         const contents = `import MouseSettings from ${JSON.stringify(path.join(extensionDir, 'MouseSettings.js'))};\n`
           + source.slice(0, start)
-          + '{navActiveKey === "mouse" && <MouseSettings values={values} rightClickValue={normalizeMouseButtonAction(values.rightClickAction, "right")} rightClickOptions={renderMouseButtonOptions(["menu", "paste", "none"], this.props.app?.site ? Boolean(this.props.app.site.supportNavKeys) : true)} onCloseClick={this.handleCloseClick} onTextInputChange={this.handleTextInputChange} onCheckboxChange={this.handleCheckboxChange} />}\n'
+          + '{navActiveKey === "mouse" && <MouseSettings values={values} rightClickValue={normalizeMouseButtonAction(values.rightClickAction, "right")} rightClickOptions={renderMouseButtonOptions(["menu", "paste", "none"], this.props.app?.site ? Boolean(this.props.app.site.supportNavKeys) : true)} wheelOptions={renderWheelActionOptions()} wheelDescription={renderOptionDesc(getWheelActionDesc(values.mouseWheelAction || "none"))} onCloseClick={this.handleCloseClick} onTextInputChange={this.handleTextInputChange} onCheckboxChange={this.handleCheckboxChange} />}\n'
           + source.slice(end);
         return { contents, loader: 'jsx' };
       });

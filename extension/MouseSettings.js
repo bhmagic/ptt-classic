@@ -1,6 +1,6 @@
 import { _ } from '../src/js/i18n.js';
 
-export default function MouseSettings({ values, rightClickValue, rightClickOptions, onCloseClick, onTextInputChange, onCheckboxChange }) {
+export default function MouseSettings({ values, rightClickValue, rightClickOptions, wheelOptions, wheelDescription, onCloseClick, onTextInputChange, onCheckboxChange }) {
   return (
     <fieldset className="PrefModal__Grid__Col--right__Fieldset">
       <div className="TabLegend">
@@ -14,6 +14,14 @@ export default function MouseSettings({ values, rightClickValue, rightClickOptio
             value={rightClickValue} onChange={onTextInputChange}>
             {rightClickOptions}
           </select>
+        </div>
+        <div className="form-group">
+          <label className="control-label" htmlFor="mouseWheelActionInput">{_('options_mouseWheelAction')}</label>
+          <select id="mouseWheelActionInput" className="form-control" name="mouseWheelAction"
+            value={values.mouseWheelAction || 'none'} onChange={onTextInputChange}>
+            {wheelOptions}
+          </select>
+          {wheelDescription}
         </div>
         <div className="checkbox">
           <label>

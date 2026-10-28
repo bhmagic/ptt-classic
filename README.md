@@ -1,17 +1,21 @@
 # PTT Classic — powered by ptt-term
 
-PTT in a Chrome tab, using the current [ptt/ptt-term](https://github.com/ptt/ptt-term) terminal core with direct connection unblocking and integrated media previews. Version **0.2.6** is a test release based on upstream 3.0.3, production commit [`ba7c00d`](https://github.com/ptt/ptt-term/commit/ba7c00d5edff1654bf3cc89994b9dd2d23a072fe).
+PTT in a Chrome tab, using the current [ptt/ptt-term](https://github.com/ptt/ptt-term) terminal core with direct connection unblocking and integrated media previews. Version **0.2.7** is a test release based on upstream 3.0.3, production commit [`ba7c00d`](https://github.com/ptt/ptt-term/commit/ba7c00d5edff1654bf3cc89994b9dd2d23a072fe).
 
 The original classic interface is preserved separately as [release 0.1.1](https://github.com/bhmagic/ptt-classic/releases/tag/v0.1.1), including its ready-to-load ZIP and complete source. The permanent `archive/classic-0.1.1` branch also preserves that version.
 
 ## Install or update
 
-1. Download the ready-to-load `ptt-classic-0.2.6.zip` from the [0.2.6 test release](https://github.com/bhmagic/ptt-classic/releases/tag/v0.2.6) and extract it. GitHub's automatic Source code ZIP is not an installable extension.
+1. Download the ready-to-load `ptt-classic-0.2.7.zip` from the [0.2.7 test release](https://github.com/bhmagic/ptt-classic/releases/tag/v0.2.7) and extract it. GitHub's automatic Source code ZIP is not an installable extension.
 2. Open `chrome://extensions`, enable Developer mode, and load the folder containing `manifest.json`. A local build writes to `dist/ptt-classic`.
 3. For an existing installation, log out of PTT, replace its folder with the new package, click Reload on the extension card, and refresh the terminal tab. If using this checkout's existing `dist/ptt-classic` installation, the build already updates that folder.
 4. Click the PTT Classic extension icon to open the terminal.
 
 The fixed extension ID and bookmark remain `chrome-extension://gpephnjkgejlfddpjkgkeiffflnnkekg/index.html`. The upgrade preserves saved preferences, maps the old margin and preview settings, and stores a copy of the original settings before migration. No local server or additional extension is needed.
+
+## Regular mouse-wheel selector in 0.2.7
+
+Settings → Mouse → Mouse wheel (滑鼠滾輪) offers 1, 2, 3 or 5 lines per notch, Page Up/Down, and No action. Close settings to apply and save the choice; it is retained after reload. The default remains No action. Only ordinary wheel scrolling is configurable: wheel + left/right click remains disabled, and the other removed mouse controls stay hidden.
 
 ## GIF previews in 0.2.6
 
@@ -35,7 +39,7 @@ Expand Settings → Add-ons → Image and Media Preview → Options to adjust ma
 - Preserved the direct PTT WebSocket Origin rule and extension-scoped Imgur, YouTube, and `i.verb.tw` header fixes.
 - Integrated hover images, Imgur albums, extensionless meee links, inline animated media, and YouTube through the new plugin interface. Both renderers are supported. Images have no added white background, padding, or border. Twitch clips retain a working link to open the provider.
 - Removed Virtual Keyboard, PWA Installation, Login Assist, Mouse Browsing, Live Update, and the Developer Tools group from the active add-ons.
-- Reserved left click for text selection. Middle click and every terminal wheel shortcut remain No action. The Mouse settings retain only right-click behavior and Trim whitespace when copying; the other mouse checkboxes are removed and disabled, including old saved choices.
+- Reserved left click for text selection. Middle click and wheel + left/right click remain No action. The Mouse settings retain right-click behavior, the regular wheel selector restored in 0.2.7, and Trim whitespace when copying; the other mouse checkboxes are removed and disabled, including old saved choices.
 
 Remaining add-ons: media preview, input helper, Easy Reading, automatic wrapping, and anti-idle. Right-click the terminal and choose 設定 to configure them. Enable 好讀模式 for inline article media.
 

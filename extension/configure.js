@@ -18,7 +18,7 @@ for (let index = BUILTIN_PLUGINS.length - 1; index >= 0; index--) {
   if (removedPlugins.has(BUILTIN_PLUGINS[index].id)) BUILTIN_PLUGINS.splice(index, 1);
 }
 registerPluginPrefs([ExtensionMediaPreviewer]);
-Object.assign(DEFAULT_PREFS, FIXED_PREFERENCES);
+Object.assign(DEFAULT_PREFS, { mouseWheelAction: 'none' }, FIXED_PREFERENCES);
 try {
   migrateClassicPreferences(window.localStorage);
   applyExtensionPreferences(window.localStorage);

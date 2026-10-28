@@ -4,7 +4,6 @@ export const MIGRATION_KEY = 'pttclassic.preferences.migrated-0.2.0';
 export const FIXED_PREFERENCES = {
   mouseLeftFunction: 'none',
   mouseMiddleFunction: 'none',
-  mouseWheelAction: 'none',
   mouseWheelRightAction: 'none',
   mouseWheelLeftAction: 'none',
   mouseWheelTrackpadMode: false,
@@ -26,8 +25,8 @@ export function applyExtensionPreferences(storage) {
   try {
     const raw = storage.getItem(PREF_KEY);
     const data = raw ? JSON.parse(raw) : {};
-    const values = { ...data.values, ...FIXED_PREFERENCES };
-    // Remove old wheel aliases so upstream cannot remigrate them over "none".
+    const values = { mouseWheelAction: 'none', ...data.values, ...FIXED_PREFERENCES };
+    // Keep legacy wheel aliases from overriding the current choice or disabled combinations.
     for (const key of ['mouseWheelFunction1', 'mouseWheelFunction2', 'mouseWheelFunction3', 'useMouseBrowsing', 'enableAutoLogin']) delete values[key];
     storage.setItem(PREF_KEY, JSON.stringify({ ...data, values }));
   } catch {

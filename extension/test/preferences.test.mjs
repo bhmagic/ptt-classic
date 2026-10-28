@@ -47,8 +47,30 @@ test('removed mouse actions and plugins cannot survive old preferences while cop
   applyExtensionPreferences(local);
   const values = JSON.parse(local.getItem('pttchrome.pref.v1')).values;
   for (const [key, value] of Object.entries(FIXED_PREFERENCES)) assert.equal(values[key], value, key);
+  assert.equal(values.mouseWheelAction, 'none');
   assert.equal(values.mouseWheelFunction1, undefined);
   assert.equal(values.enableAutoLogin, undefined);
   assert.equal(values.trimTrailingSpaces, false);
   assert.equal(values.rightClickAction, 'menu');
+});
+
+test('the regular wheel choice survives startup while wheel-click combinations stay disabled', () => {
+  const local = storage({ 'pttchrome.pref.v1': JSON.stringify({ values: {
+    mouseWheelAction: 'arrow-3', mouseWheelFunction1: 0,
+    mouseWheelRightAction: 'page', mouseWheelLeftAction: 'arrow-5',
+    mouseWheelFunction2: 1, mouseWheelFunction3: 1,
+  } }) });
+  for (const action of ['arrow-3', 'page', 'none']) {
+    const data = JSON.parse(local.getItem('pttchrome.pref.v1'));
+    data.values.mouseWheelAction = action;
+    local.setItem('pttchrome.pref.v1', JSON.stringify(data));
+    applyExtensionPreferences(local);
+    const values = JSON.parse(local.getItem('pttchrome.pref.v1')).values;
+    assert.equal(values.mouseWheelAction, action);
+    assert.equal(values.mouseWheelRightAction, 'none');
+    assert.equal(values.mouseWheelLeftAction, 'none');
+    for (const key of ['mouseWheelFunction1', 'mouseWheelFunction2', 'mouseWheelFunction3']) {
+      assert.equal(values[key], undefined);
+    }
+  }
 });

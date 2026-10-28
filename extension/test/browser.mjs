@@ -188,7 +188,12 @@ try {
     assert.equal(await page.evaluate(() => window.app.prefValues.fontFace), 'monospace');
     await modal.locator('.nav a').nth(3).click();
     assert.deepEqual(await modal.locator('input[type="checkbox"]').evaluateAll(inputs => inputs.map(input => input.name)), ['trimTrailingSpaces']);
-    assert.deepEqual(await modal.locator('select').evaluateAll(inputs => inputs.map(input => input.name)), ['rightClickAction']);
+    assert.deepEqual(await modal.locator('select').evaluateAll(inputs => inputs.map(input => input.name)), ['rightClickAction', 'mouseWheelAction']);
+    const wheelSelector = modal.getByRole('combobox', { name: '滑鼠滾輪', exact: true });
+    assert.equal(await wheelSelector.inputValue(), 'none');
+    assert.deepEqual(await wheelSelector.locator('option').evaluateAll(options => options.map(option => option.value)),
+      ['arrow-1', 'arrow-2', 'arrow-3', 'arrow-5', 'page', 'none']);
+    await wheelSelector.selectOption('arrow-3');
     await page.screenshot({ path: path.join(results, 'mouse-settings.png') });
     await modal.locator('.nav a').nth(4).click();
     assert.doesNotMatch(await modal.innerText(), /虛擬鍵盤|PWA|輔助登入|滑鼠瀏覽|Live文|開發者工具/);
@@ -228,8 +233,12 @@ try {
     await page.reload();
     await waitForTerminal('PTT CLASSIC OFFLINE TEST');
     assert.deepEqual(await page.evaluate(() => [window.app.prefValues.picPreviewMaxHeight, window.app.prefValues.picPreviewMaxWidth, window.app.prefValues.youtubePreviewWidth]), [99, 99, 250]);
+    assert.equal(await page.evaluate(() => window.app.mouseWheelAction), 'arrow-3', 'The chosen wheel action must survive a reload');
     await openMenu();
     await page.getByRole('menuitem', { name: '設定', exact: true }).click();
+    await modal.locator('.nav a').nth(3).click();
+    assert.equal(await wheelSelector.inputValue(), 'arrow-3');
+    await wheelSelector.selectOption('none');
     await modal.locator('.nav a').nth(4).click();
     await mediaSettings.locator('.PrefModal__MacOptionsBtn').click();
     assert.equal(await heightSlider.inputValue(), '99');
@@ -277,6 +286,33 @@ try {
     await page.locator('#mainContainer').dispatchEvent('wheel', { deltaY: 150, buttons: 2, bubbles: true });
     await page.waitForTimeout(200);
     assert.equal(sent.join(''), sentBeforeMouse, 'Disabled mouse actions must not send PTT commands');
+
+    // Exercise every restored choice through the real settings UI and terminal socket.
+    for (const action of ['arrow-1', 'arrow-2', 'arrow-3', 'arrow-5', 'page', 'none']) {
+      await openMenu();
+      await page.getByRole('menuitem', { name: '設定', exact: true }).click();
+      await modal.locator('.nav a').nth(3).click();
+      await wheelSelector.selectOption(action);
+      await modal.locator('.close:visible').click();
+      await modal.waitFor({ state: 'hidden' });
+      assert.equal(await page.evaluate(() => window.app.mouseWheelAction), action);
+      const before = sent.join('').length;
+      const terminal = page.locator('#mainContainer');
+      for (const deltaY of [120, -120]) {
+        await terminal.dispatchEvent('wheel', { deltaY, buttons: 0, bubbles: true, cancelable: true });
+        for (const buttons of [1, 2, 3]) {
+          await terminal.dispatchEvent('wheel', { deltaY, buttons, bubbles: true, cancelable: true });
+        }
+      }
+      // A unique keyboard marker waits for socket delivery, including the no-action case.
+      const marker = `wheel-${action}`;
+      await page.keyboard.type(marker);
+      await waitForSent(new RegExp(`${marker}$`));
+      const lines = action.startsWith('arrow-') ? Number(action.split('-')[1]) : 0;
+      const expected = action === 'page' ? '\x1b[6~\x1b[5~' : '\x1b[B'.repeat(lines) + '\x1b[A'.repeat(lines);
+      assert.equal(sent.join('').slice(before), expected + marker,
+        'Only the regular wheel may send the selected navigation commands');
+    }
 
     for (const viewport of [{ width: 900, height: 600 }, { width: 1920, height: 1080 }]) {
       await page.setViewportSize(viewport);

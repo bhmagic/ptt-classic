@@ -1,4 +1,4 @@
-# PTT Classic 0.2.6 for Chrome
+# PTT Classic 0.2.7 for Chrome
 
 A local Manifest V3 extension powered by ptt-term 3.0.3 at production commit `ba7c00d5edff1654bf3cc89994b9dd2d23a072fe`. Source: [bhmagic/ptt-classic](https://github.com/bhmagic/ptt-classic). This is an independent community build.
 
@@ -20,7 +20,9 @@ YouTube has its own display-width slider below the image controls: 240–2560px 
 
 The remaining add-ons are Media Preview, Input Helper, Easy Reading, Auto Wrap, and Anti-Idle. Virtual Keyboard, PWA Installation, Login Assist, Mouse Browsing, Live Update, and Developer Tools are removed from the active registry and settings.
 
-Left click selects text. Middle click and all terminal wheel shortcuts are fixed to No action. Old saved mouse actions cannot re-enable them. The Mouse tab contains right-click behavior and only one checkbox: Trim whitespace when copying (複製時自動修剪行尾空白). Automatic copying on selection, terminal mouse reporting, back navigation, and special wheel modes are disabled. Scrolling the Easy Reading article itself still works normally.
+Left click selects text. Middle click and wheel + left/right click are fixed to No action. Old saved mouse actions cannot re-enable them. The Mouse tab contains right-click behavior, the regular Mouse wheel (滑鼠滾輪) selector, and only one checkbox: Trim whitespace when copying (複製時自動修剪行尾空白). Automatic copying on selection, terminal mouse reporting, back navigation, and special wheel modes are disabled. Scrolling the Easy Reading article itself still works normally.
+
+The regular wheel selector offers 1, 2, 3 or 5 lines per notch, Page Up/Down, and No action. It defaults to No action. Close settings to apply and save the selected behavior; the choice survives reload. Enabling ordinary scrolling does not enable wheel-click combinations.
 
 ## Direct connection and host rules
 
