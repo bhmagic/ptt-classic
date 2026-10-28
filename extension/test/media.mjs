@@ -21,6 +21,27 @@ async function assertImageSize(locator, { width, height }) {
   assert.ok(Math.abs(bounds.height - height) < 1, `Expected image height ${height}, got ${bounds.height}`);
 }
 
+async function textAreaSize(page, inline = false) {
+  return page.evaluate(inline => {
+    const style = getComputedStyle(document.querySelector(inline ? '#easyReadingOverlay' : '#TermWindow'));
+    const width = parseFloat(style.getPropertyValue('--term-chw')) * Number(style.getPropertyValue('--term-cols'));
+    const height = parseFloat(style.getPropertyValue('--term-chh')) * Number(style.getPropertyValue('--term-rows'));
+    return {
+      width: width * (inline ? 1 : window.app.view.scaleX),
+      height: height * (inline ? 1 : window.app.view.scaleY),
+    };
+  }, inline);
+}
+
+async function resizeWindow(page, viewport) {
+  await page.setViewportSize(viewport);
+  await page.waitForFunction(() => {
+    const app = window.app;
+    const actual = app.view.getWindowInnerBounds();
+    return !app.resizeTimeout && actual.width === app.view.innerBounds.width && actual.height === app.view.innerBounds.height;
+  });
+}
+
 async function setImageLimits(page, width, height) {
   await page.evaluate(({ width, height }) => window.app.onValuesPrefChange({
     ...window.app.prefValues, picPreviewMaxWidth: width, picPreviewMaxHeight: height,
@@ -93,8 +114,9 @@ export async function exerciseMedia(page, send, results) {
       await container.locator('a[href="https://i.imgur.com/fixture.jpg"]').hover();
       await page.waitForFunction(() => document.querySelector('.image-preview-loaded img')?.complete);
       const viewport = page.viewportSize();
-      const scale = Math.min(1, Math.min(viewport.width * width / 100, viewport.width - 16) / 1600,
-        Math.min(viewport.height * height / 100, viewport.height - 16) / 1000);
+      const textArea = await textAreaSize(page);
+      const scale = Math.min(1, Math.min(textArea.width * width / 100, viewport.width - 16) / 1600,
+        Math.min(textArea.height * height / 100, viewport.height - 16) / 1000);
       await assertImageSize(preview, { width: 1600 * scale, height: 1000 * scale });
       const bounds = await preview.boundingBox();
       assert.ok(bounds.x >= 0 && bounds.y >= 0 && bounds.x + bounds.width <= viewport.width && bounds.y + bounds.height <= viewport.height);
@@ -104,10 +126,38 @@ export async function exerciseMedia(page, send, results) {
       await page.mouse.move(10, 10);
       await container.locator('a[href="https://i.imgur.com/small.jpg"]').hover();
       await page.waitForFunction(() => document.querySelector('.image-preview-loaded img')?.src.endsWith('/small.jpg'));
-      const viewport = page.viewportSize();
-      const scale = Math.min(1, viewport.width * width / 100 / 320, viewport.height * height / 100 / 200);
+      const textArea = await textAreaSize(page);
+      const scale = Math.min(1, textArea.width * width / 100 / 320, textArea.height * height / 100 / 200);
       await assertImageSize(preview, { width: 320 * scale, height: 200 * scale });
     }
+    const originalViewport = page.viewportSize();
+    await setImageLimits(page, 30, 100);
+    // Adding empty space beside an unchanged 80-column text grid must not enlarge images.
+    for (const width of [1920, 2560]) {
+      await resizeWindow(page, { width, height: 900 });
+      await page.mouse.move(10, 10);
+      await container.locator('a[href="https://i.imgur.com/fixture.jpg"]').hover();
+      await preview.waitFor();
+      await assertImageSize(preview, { width: 432, height: 270 });
+    }
+    await resizeWindow(page, { width: 1920, height: 900 });
+    await page.evaluate(() => window.app.onValuesPrefChange({
+      ...window.app.prefValues, termSize: { cols: 120, rows: 30 },
+    }));
+    await page.mouse.move(10, 10);
+    await container.locator('a[href="https://i.imgur.com/fixture.jpg"]').hover();
+    await preview.waitFor();
+    await assertImageSize(preview, { width: 504, height: 315 });
+    await page.evaluate(() => window.app.onValuesPrefChange({
+      ...window.app.prefValues, termSize: { cols: 80, rows: 24 }, fontFitWindowWidth: true,
+    }));
+    await page.mouse.move(10, 10);
+    await container.locator('a[href="https://i.imgur.com/fixture.jpg"]').hover();
+    await preview.waitFor();
+    const stretchedGrid = await textAreaSize(page);
+    await assertImageSize(preview, { width: stretchedGrid.width * 0.3, height: stretchedGrid.width * 0.3 / 1.6 });
+    await page.evaluate(() => window.app.onValuesPrefChange({ ...window.app.prefValues, fontFitWindowWidth: false }));
+    await resizeWindow(page, originalViewport);
     await setImageLimits(page, 90, 80);
     await page.mouse.move(10, 10);
     await container.locator('a[href="https://i.imgur.com/fixture.jpg"]').hover();
@@ -146,17 +196,32 @@ export async function exerciseMedia(page, send, results) {
   await inlineImage.evaluate(img => { img.dataset.sizeTestMounted = 'true'; });
   await setImageLimits(page, 30, 100);
   const viewport = page.viewportSize();
-  await assertImageSize(inlineImage, { width: viewport.width * 0.3, height: viewport.width * 0.3 / 1.6 });
+  const textArea = await textAreaSize(page, true);
+  await assertImageSize(inlineImage, { width: textArea.width * 0.3, height: textArea.width * 0.3 / 1.6 });
   await setImageLimits(page, 100, 25);
-  await assertImageSize(inlineImage, { width: viewport.height * 0.25 * 1.6, height: viewport.height * 0.25 });
+  await assertImageSize(inlineImage, { width: textArea.height * 0.25 * 1.6, height: textArea.height * 0.25 });
   assert.equal(await inlineImage.getAttribute('data-size-test-mounted'), 'true', 'Changing limits resizes existing inline images without remounting them');
-  await page.setViewportSize({ width: 900, height: 600 });
-  await assertImageSize(inlineImage, { width: 600 * 0.25 * 1.6, height: 600 * 0.25 });
-  await page.setViewportSize(viewport);
+  await resizeWindow(page, { width: 900, height: 600 });
+  const smallerTextArea = await textAreaSize(page, true);
+  await assertImageSize(inlineImage, { width: smallerTextArea.height * 0.25 * 1.6, height: smallerTextArea.height * 0.25 });
+  await resizeWindow(page, viewport);
   await setImageLimits(page, 100, 100);
   const containerWidth = await inlineImage.evaluate(img => img.parentElement.clientWidth);
-  const scale = Math.min(1, containerWidth / 1600, viewport.width / 1600, viewport.height / 1000);
+  const scale = Math.min(1, containerWidth / 1600, textArea.width / 1600, textArea.height / 1000);
   await assertImageSize(inlineImage, { width: 1600 * scale, height: 1000 * scale });
+  await setImageLimits(page, 30, 100);
+  for (const width of [1920, 2560]) {
+    await resizeWindow(page, { width, height: 900 });
+    await assertImageSize(inlineImage, { width: 432, height: 270 });
+  }
+  await setImageLimits(page, 100, 25);
+  // Adding empty space below the same text grid must not increase the height limit.
+  for (const height of [900, 1200]) {
+    await resizeWindow(page, { width: 1400, height });
+    await assertImageSize(inlineImage, { width: 307.2, height: 192 });
+  }
+  assert.equal(await inlineImage.getAttribute('data-size-test-mounted'), 'true', 'Text-area resizing must preserve mounted inline images');
+  await resizeWindow(page, viewport);
   await setImageLimits(page, 90, 80);
   const album = page.locator('[data-media-href="https://imgur.com/a/album123"]');
   await album.scrollIntoViewIfNeeded();
@@ -185,12 +250,12 @@ export async function exerciseMedia(page, send, results) {
   await assertImageSize(inlineImage, imageBeforeVideoResize);
   assert.equal(await youtube.getAttribute('data-size-test-mounted'), 'true', 'Changing either setting must not recreate the YouTube player');
   await setYoutubeWidth(page, 640);
-  await page.setViewportSize({ width: 900, height: 600 });
+  await resizeWindow(page, { width: 900, height: 600 });
   await assertImageSize(youtube, { width: 640, height: 360 });
   await setYoutubeWidth(page, 2560);
   const narrowParent = await youtube.locator('..').boundingBox();
   await assertImageSize(youtube, { width: narrowParent.width, height: narrowParent.width * 9 / 16 });
-  await page.setViewportSize(viewport);
+  await resizeWindow(page, viewport);
   await setYoutubeWidth(page, 800);
   const twitch = page.locator('[data-media-href^="https://clips.twitch.tv/"]');
   await twitch.scrollIntoViewIfNeeded();
@@ -209,7 +274,8 @@ export async function exerciseMedia(page, send, results) {
     await page.evaluate(useCanvasEngine => window.app.onValuesPrefChange({ ...window.app.prefValues, useCanvasEngine }), useCanvasEngine);
     for (const [width, height] of [[100, 100], [10, 100], [100, 10], [100, 100]]) {
       await setImageLimits(page, width, height);
-      const scale = Math.min(1, viewport.width * width / 100 / 320, viewport.height * height / 100 / 200);
+      const currentTextArea = await textAreaSize(page, true);
+      const scale = Math.min(1, currentTextArea.width * width / 100 / 320, currentTextArea.height * height / 100 / 200);
       await assertImageSize(smallInline, { width: 320 * scale, height: 200 * scale });
     }
     // The article overlay is outside the scaled terminal and must ignore its legacy inverse scale.
@@ -229,5 +295,6 @@ export async function exerciseMedia(page, send, results) {
     albumVideo: true, youtubeElement: true, twitchLink: true, borderlessImages: true,
     sharedImageSizeSliders: true, independentWidthAndHeight: true, inlineResizeWithoutRemount: true,
     smallImagesNeverEnlarged: true, inlineIgnoresTerminalScaling: true,
+    textAreaRelativeLimits: true, emptyWindowSpaceIgnored: true, configuredGridSize: true, stretchedTerminalHover: true,
     youtubeIndependentPixelWidth: true, youtubeCentered: true, youtubeResizeWithoutRemount: true };
 }

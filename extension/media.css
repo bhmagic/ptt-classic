@@ -3,8 +3,8 @@
   display: block;
   width: auto;
   height: auto;
-  max-width: min(100%, var(--ptt-image-max-width, 90vw));
-  max-height: var(--ptt-image-max-height, 80vh);
+  max-width: min(100%, calc(var(--term-chw, 13px) * var(--term-cols, 80) * var(--ptt-image-width-ratio, 0.9)));
+  max-height: calc(var(--term-chh, 26px) * var(--term-rows, 24) * var(--ptt-image-height-ratio, 0.8));
 }
 .ptt-sized-hover {
   position: fixed;

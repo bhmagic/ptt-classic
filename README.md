@@ -1,27 +1,29 @@
 # PTT Classic — powered by ptt-term
 
-PTT in a Chrome tab, using the current [ptt/ptt-term](https://github.com/ptt/ptt-term) terminal core with direct connection unblocking and integrated media previews. Version **0.2.4** is a test release based on upstream 3.0.3, production commit [`ba7c00d`](https://github.com/ptt/ptt-term/commit/ba7c00d5edff1654bf3cc89994b9dd2d23a072fe).
+PTT in a Chrome tab, using the current [ptt/ptt-term](https://github.com/ptt/ptt-term) terminal core with direct connection unblocking and integrated media previews. Version **0.2.5** is a test release based on upstream 3.0.3, production commit [`ba7c00d`](https://github.com/ptt/ptt-term/commit/ba7c00d5edff1654bf3cc89994b9dd2d23a072fe).
 
 The original classic interface is preserved separately as [release 0.1.1](https://github.com/bhmagic/ptt-classic/releases/tag/v0.1.1), including its ready-to-load ZIP and complete source. The permanent `archive/classic-0.1.1` branch also preserves that version.
 
 ## Install or update
 
-1. Download the ready-to-load `ptt-classic-0.2.4.zip` from the [0.2.4 test release](https://github.com/bhmagic/ptt-classic/releases/tag/v0.2.4) and extract it. GitHub's automatic Source code ZIP is not an installable extension.
+1. Download the ready-to-load `ptt-classic-0.2.5.zip` from the [0.2.5 test release](https://github.com/bhmagic/ptt-classic/releases/tag/v0.2.5) and extract it. GitHub's automatic Source code ZIP is not an installable extension.
 2. Open `chrome://extensions`, enable Developer mode, and load the folder containing `manifest.json`. A local build writes to `dist/ptt-classic`.
 3. For an existing installation, log out of PTT, replace its folder with the new package, click Reload on the extension card, and refresh the terminal tab. If using this checkout's existing `dist/ptt-classic` installation, the build already updates that folder.
 4. Click the PTT Classic extension icon to open the terminal.
 
 The fixed extension ID and bookmark remain `chrome-extension://gpephnjkgejlfddpjkgkeiffflnnkekg/index.html`. The upgrade preserves saved preferences, maps the old margin and preview settings, and stores a copy of the original settings before migration. No local server or additional extension is needed.
 
-## Media sizing in 0.2.4
+## Media sizing in 0.2.5
 
 Preview limits only shrink oversized images. Smaller images stay at their natural size, even with both sliders at 100%. Inline images no longer inherit the terminal's legacy preview scaling. Both inline and hover previews are checked for shrinking and returning to natural size without enlargement.
 
+Image percentages follow the rendered text area: columns times character width, and rows times line height. Empty space around the text does not enlarge previews. Inline images follow the article's current text metrics automatically; hover images follow the rendered terminal grid and remain within the window. Font, row/column and window changes update the limits without reloading images.
+
 YouTube has a separate display-width slider in pixels under the two image sliders: 240–2560px in 10px steps, defaulting to 800px. It is independent of the image height and width limits. Players remain centered at 16:9 and shrink to fit the article if the chosen width is larger than the available space. Adjusting the slider resizes the existing player without reloading it, and the choice is saved when settings close.
 
-## Image size controls in 0.2.1
+## Image size controls
 
-Expand Settings → Add-ons → Image and Media Preview → Options to adjust maximum image height and width. The two sliders range from 10% to 100% of the window dimensions, defaulting to 80% height and 90% width. They share one saved setting for inline and hover images and apply when settings close. Images keep their proportions, small images are not enlarged, and inline images also fit the article width. Original files are unchanged.
+Expand Settings → Add-ons → Image and Media Preview → Options to adjust maximum image height and width. The two sliders range from 10% to 100% of the text-area dimensions, defaulting to 80% height and 90% width. They share one saved setting for inline and hover images and apply when settings close. Existing percentage values are preserved. Images keep their proportions, small images are not enlarged, and inline images also fit the article width. Original files are unchanged.
 
 ## Core upgrade in 0.2.0
 

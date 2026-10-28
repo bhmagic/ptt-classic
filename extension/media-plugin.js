@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'preact/compat';
+import React, { createPortal, useEffect, useRef, useState } from 'preact/compat';
 import { MediaPreviewer } from '../src/plugins/media_previewer/MediaPreviewer.js';
 import ImagePreviewer, { getCachedImageRequest } from '../src/plugins/media_previewer/ImagePreviewer.js';
 import { getActiveLocale } from '../src/js/i18n.js';
@@ -47,8 +47,8 @@ function ImageSizeOptions({ values = {}, handleValueChange }) {
         }));
     }),
     h('p', { id: 'ptt-image-size-help' }, chinese
-      ? '以視窗尺寸的百分比設定，文章內圖片與滑鼠圖片預覽共用上限。只縮小超過上限的圖片，保留比例，不放大填滿上限。關閉設定後套用。'
-      : 'Percent of the window size, shared by inline and hover images. Only oversized images shrink, keeping their proportions; smaller images stay at their natural size. Applied when settings close.'),
+      ? '以文字區域尺寸的百分比設定，隨字體與行列數調整，文章內圖片與滑鼠圖片預覽共用上限。只縮小超過上限的圖片，保留比例，不放大填滿上限。關閉設定後套用。'
+      : 'Percent of the text area, following its font size, columns and rows. Shared by inline and hover images. Oversized images shrink proportionally; smaller images stay at their natural size. Applied when settings close.'),
     h('div', { className: 'ptt-image-size-control ptt-youtube-size-control' },
       h('label', { htmlFor: 'youtubePreviewWidth' }, chinese ? 'YouTube 顯示寬度' : 'YouTube display width'),
       h('output', { htmlFor: 'youtubePreviewWidth' }, `${youtubeWidth} px`),
@@ -70,11 +70,11 @@ function SizedHoverImage(props) {
     window.addEventListener('resize', resize);
     return () => window.removeEventListener('resize', resize);
   }, []);
-  const { value, error, limits } = props;
+  const { value, error, limits, textArea } = props;
   if (!value || error) return h(ImagePreviewer.OnHover, props);
   const margin = 8;
-  const maxWidth = Math.min(viewport.width * limits.width / 100, viewport.width - margin * 2);
-  const maxHeight = Math.min(viewport.height * limits.height / 100, viewport.height - margin * 2);
+  const maxWidth = Math.min(textArea.width * limits.width / 100, viewport.width - margin * 2);
+  const maxHeight = Math.min(textArea.height * limits.height / 100, viewport.height - margin * 2);
   const scale = Math.min(1, maxWidth / value.width, maxHeight / value.height);
   const width = value.width * scale;
   const height = value.height * scale;
@@ -215,8 +215,8 @@ export class ExtensionMediaPreviewer extends MediaPreviewer {
       height: imageSizePercent(prefs.picPreviewMaxHeight, IMAGE_SIZE_DEFAULTS.picPreviewMaxHeight),
     };
     // CSS updates mounted media without rebuilding the article or YouTube player.
-    document.documentElement.style.setProperty('--ptt-image-max-width', `${this.imageLimits.width}vw`);
-    document.documentElement.style.setProperty('--ptt-image-max-height', `${this.imageLimits.height}vh`);
+    document.documentElement.style.setProperty('--ptt-image-width-ratio', String(this.imageLimits.width / 100));
+    document.documentElement.style.setProperty('--ptt-image-height-ratio', String(this.imageLimits.height / 100));
     document.documentElement.style.setProperty('--ptt-youtube-width', `${youtubeWidthPixels(prefs.youtubePreviewWidth)}px`);
   }
 
@@ -239,8 +239,17 @@ export class ExtensionMediaPreviewer extends MediaPreviewer {
   _updateViewHooks(enabled) {
     super._updateViewHooks(enabled);
     if (enabled && this.view) {
-      this.view.renderHyperlinkPreview = props => props.request
-        ? h(ImagePreviewer, { ...props, limits: this.imageLimits, component: SizedHoverImage }) : null;
+      this.view.renderHyperlinkPreview = props => {
+        if (!props.request) return null;
+        const textArea = {
+          width: this.buf.cols * this.view.chw * (this.view.scaleX || 1),
+          height: this.buf.rows * this.view.chh * (this.view.scaleY || 1),
+        };
+        // Keep viewport positioning independent of the DOM terminal's transform.
+        return createPortal(h(ImagePreviewer, {
+          ...props, limits: this.imageLimits, textArea, component: SizedHoverImage,
+        }), document.body);
+      };
     }
   }
 
