@@ -26,6 +26,8 @@ The adapter handles hover and lazy inline rendering for both upstream renderers,
 
 ## Independently written additions
 
+Version 0.2.6 corrects the extension adapter's Imgur GIF handling: GIF URLs remain images instead of being rewritten to MP4 players. The vendored upstream helpers are unchanged.
+
 The following integration files are additionally available under [MIT](LICENSES/MIT-PTT-Classic.txt):
 
 - `extension/background.js`, `extension/build.mjs`, `extension/client.js`, `extension/configure.js`, `extension/preferences.js`, `extension/media-plugin.js`, `extension/media.css`, and `extension/MouseSettings.js`.

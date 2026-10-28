@@ -1,6 +1,6 @@
 {
   "name": "ptt-classic-extension",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "private": true,
   "type": "module",
   "license": "GPL-2.0-only",

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PTT Classic",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "PTT in a Chrome tab, powered by ptt-term. Direct connection, Canvas and DOM rendering, and built-in media previews.",
   "minimum_chrome_version": "101",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAy2KMD/xU+qrj9wxPiDQTpTbKOoxot0czlKCYJP+DaGvIlN+mgJRpRgsXPemCoq/UqL4m3WaMJDeOR+WPoMN8rQ4VC0E5nwRYJkgKJ4OGVGLHAsmXuaRSys5KzO1D8VNyjFxIYUSFzDh7cwobhcow4kGTTmFH2OjdO2y5/w6S2kkhaR/VM2qFar10gsmQooZWRN7hXPGK2YoyTGYY3uY79oONqei4jyl8zsEMJmWWktrQfOlH1QlHGAjGkYeiCf2mWMM3rupcJCe7WUTGt3RgjVdBDVtnvkmZcFY7GnwFZcO1njVNj0S2tsJEUyyUbI+WVRVF3yHeqWajjmbYb7gBPQIDAQAB",

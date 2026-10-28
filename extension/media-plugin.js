@@ -178,9 +178,10 @@ function ResolvedInlineMedia({ media, href }) {
   if (!items.length) return h(OpenMedia, { href });
   return items.map((item, index) => {
     const first = item.sources[0];
-    const video = /^https:\/\/i\.imgur\.com\/.*\.(gif|mp4)(?:[?#]|$)/i.test(first);
+    // GIFs remain animated images; only actual MP4 links need playback controls.
+    const video = /^https:\/\/i\.imgur\.com\/.*\.mp4(?:[?#]|$)/i.test(first);
     return video
-      ? h(InlineVideo, { key: index, src: first.replace(/\.gif(?=[?#]|$)/i, '.mp4'), href: first })
+      ? h(InlineVideo, { key: index, src: first, href: first })
       : h(InlineImage, { key: index, sources: item.sources, href });
   });
 }

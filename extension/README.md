@@ -1,4 +1,4 @@
-# PTT Classic 0.2.5 for Chrome
+# PTT Classic 0.2.6 for Chrome
 
 A local Manifest V3 extension powered by ptt-term 3.0.3 at production commit `ba7c00d5edff1654bf3cc89994b9dd2d23a072fe`. Source: [bhmagic/ptt-classic](https://github.com/bhmagic/ptt-classic). This is an independent community build.
 
@@ -11,6 +11,8 @@ The fixed public key preserves ID `gpephnjkgejlfddpjkgkeiffflnnkekg` and the boo
 ## Features and simplified settings
 
 Hover over an image URL for a floating preview. In Settings → Add-ons, enable Easy Reading (好讀模式) to show inline images, Imgur albums, animated Imgur media, and YouTube videos in articles. Extensionless meee.com.tw image links try the available image formats. Image requests and API resolution start when relevant content is hovered or near the visible article area. Images have no extra white background, padding, or border. Twitch clips open in a new tab. Failed inline media offers an external link.
+
+Imgur GIFs remain animated images in direct links, resolved links and albums. They do not require a play button and are no longer converted to MP4 players. Original URLs and query parameters are preserved. Actual MP4 items keep their playback controls.
 
 Expand Image and Media Preview → Options under Settings → Add-ons for two size sliders: maximum display height and maximum display width. Each ranges from 10% to 100% of the rendered text area; defaults are 80% height and 90% width. The area follows columns times character width and rows times line height, excluding unused window space. Both inline and hover images use these same saved percentages, applied when settings close and updated automatically as the text layout changes. These are upper limits: oversized images shrink proportionally, and smaller images stay at their natural size instead of filling the limit. Inline images also stay within the article width; hover images stay within the window. This changes display size only.
 

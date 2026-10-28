@@ -56,6 +56,16 @@ async function setYoutubeWidth(page, youtubePreviewWidth) {
 
 export async function exerciseMedia(page, send, results) {
   const imageRequests = [];
+  // A two-frame GIF alternates red and blue without requiring a video decoder.
+  const animatedGif = Buffer.from(
+    '47494638396101000100800000ff00000000ff21ff0b4e45545343415045322e300301000000'
+    + '21f904000a0000002c0000000001000100000202440100'
+    + '21f904000a0000002c00000000010001000002024c01003b', 'hex');
+  const gifLinks = [
+    ['https://i.imgur.com/6V0tytz.gif', 'https://i.imgur.com/6V0tytz.gif'],
+    ['https://i.imgur.com/query.GIF?download=1', 'https://i.imgur.com/query.GIF?download=1'],
+    ['https://imgur.com/motion123', 'https://i.imgur.com/resolved-motion.gif'],
+  ];
   const image = '<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000"><rect width="1600" height="1000" fill="#267b92"/><text x="100" y="200" font-size="90" fill="white">Media preview fixture</text></svg>';
   const smallImage = '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="200"><rect width="320" height="200" fill="#267b92"/><text x="20" y="100" font-size="24" fill="white">320 × 200 original</text></svg>';
   await page.route(/^https:\/\/(i\.imgur\.com|i\.meee\.com\.tw|i\.verb\.tw)\//, route => {
@@ -65,13 +75,20 @@ export async function exerciseMedia(page, send, results) {
       return route.fulfill({ contentType: 'image/png', body: 'invalid-image-for-fallback-test' });
     }
     if (url.endsWith('.mp4')) return route.fulfill({ contentType: 'video/mp4', body: '' });
+    if (/\.gif$/i.test(new URL(url).pathname)) return route.fulfill({ contentType: 'image/gif', body: animatedGif });
     return route.fulfill({ contentType: 'image/svg+xml', body: url.endsWith('/small.jpg') ? smallImage : image });
   });
   await page.route('https://api.imgur.com/3/**', route => {
     const album = route.request().url().includes('/album/');
+    const motion = route.request().url().includes('/image/motion123?');
     return route.fulfill({ json: { success: true, data: album ? {
-      images: [{ link: 'https://i.imgur.com/album-first.jpg' }, { link: 'https://i.imgur.com/album-motion.gif' }]
-    } : { type: 'image/png', link: 'https://i.imgur.com/resolved-image.png' } } });
+      images: [
+        { link: 'https://i.imgur.com/album-first.jpg' },
+        { link: 'https://i.imgur.com/album-motion.gif' },
+        { link: 'https://i.imgur.com/album-video.mp4' },
+      ]
+    } : motion ? { type: 'image/gif', link: 'https://i.imgur.com/resolved-motion.gif' }
+      : { type: 'image/png', link: 'https://i.imgur.com/resolved-image.png' } } });
   });
   await page.route('https://www.youtube.com/**', route =>
     route.fulfill({ contentType: 'text/html', body: '<p>Embedded player fixture</p>' }));
@@ -83,6 +100,7 @@ export async function exerciseMedia(page, send, results) {
     ['https://imgur.com/unknown123', 'https://i.imgur.com/resolved-image.png'],
     ['https://i.verb.tw/fixture.jpg', 'https://i.verb.tw/fixture.jpg'],
     ['https://i.imgur.com/small.jpg', 'https://i.imgur.com/small.jpg'],
+    ...gifLinks,
   ];
   const container = page.locator('#mainContainer');
   const preview = page.locator('.image-preview-loaded img');
@@ -178,6 +196,7 @@ export async function exerciseMedia(page, send, results) {
     'https://youtu.be/M7lc1UVf-VE?t=45',
     'https://clips.twitch.tv/IncredulousAbstemiousFennelImGlitch',
     'https://i.imgur.com/small.jpg',
+    ...gifLinks.map(([href]) => href),
   ];
   // Feed a real Big5/ANSI article through the socket, parser and Easy Reading.
   send(articleFrame(inlineLinks));
@@ -225,8 +244,27 @@ export async function exerciseMedia(page, send, results) {
   await setImageLimits(page, 90, 80);
   const album = page.locator('[data-media-href="https://imgur.com/a/album123"]');
   await album.scrollIntoViewIfNeeded();
-  await album.locator('video').waitFor();
-  assert.equal(await album.locator('img').count(), 1);
+  await album.locator('video[src="https://i.imgur.com/album-video.mp4"]').waitFor();
+  assert.equal(await album.locator('video').count(), 1, 'Only the actual MP4 album item needs a player');
+  assert.equal(await album.locator('img').count(), 2, 'Album GIFs must remain images');
+  assert.equal(await album.locator('video').getAttribute('src'), 'https://i.imgur.com/album-video.mp4');
+  assert.equal(await album.locator('video').evaluate(video => video.controls), true, 'Actual MP4 items retain playback controls');
+  const albumGif = album.locator('img[src="https://i.imgur.com/album-motion.gif"]');
+  await albumGif.scrollIntoViewIfNeeded();
+  await albumGif.evaluate(img => img.decode());
+  await assertImageSize(albumGif, { width: 1, height: 1 });
+  for (const [href, expected] of gifLinks) {
+    const target = page.locator(`[data-media-href="${href}"]`);
+    await target.scrollIntoViewIfNeeded();
+    await target.locator('img, video, .ptt-media-fallback').waitFor();
+    assert.equal(await target.locator('video').count(), 0, 'GIF links must animate as images without a play button');
+    const gif = target.locator('img');
+    assert.equal(await gif.getAttribute('src'), expected, 'Keep the original GIF URL, including its query');
+    await gif.evaluate(img => img.decode());
+    await assertImageSize(gif, { width: 1, height: 1 });
+  }
+  assert.ok(!imageRequests.some(url => /\/(6V0tytz|query|resolved-motion|album-motion)\.mp4(?:[?#]|$)/i.test(url)),
+    'GIF previews must not request guessed MP4 variants');
   const youtube = page.locator('[data-media-href="https://youtu.be/M7lc1UVf-VE?t=45"] iframe');
   await youtube.scrollIntoViewIfNeeded();
   assert.match(await youtube.getAttribute('src'), /\/embed\/M7lc1UVf-VE\?start=45$/);
@@ -292,7 +330,7 @@ export async function exerciseMedia(page, send, results) {
   await setImageLimits(page, 90, 80);
   return { canvasHover: true, domHover: true, verbHover: true, verbInline: true, meeeFallback: true,
     imgurAlbum: true, imgurUnknown: true, stalePreviewCleanup: true, realArticleInline: true,
-    albumVideo: true, youtubeElement: true, twitchLink: true, borderlessImages: true,
+    albumVideo: true, imgurGifsStayImages: true, gifUrlsPreserved: true, youtubeElement: true, twitchLink: true, borderlessImages: true,
     sharedImageSizeSliders: true, independentWidthAndHeight: true, inlineResizeWithoutRemount: true,
     smallImagesNeverEnlarged: true, inlineIgnoresTerminalScaling: true,
     textAreaRelativeLimits: true, emptyWindowSpaceIgnored: true, configuredGridSize: true, stretchedTerminalHover: true,

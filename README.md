@@ -1,17 +1,21 @@
 # PTT Classic — powered by ptt-term
 
-PTT in a Chrome tab, using the current [ptt/ptt-term](https://github.com/ptt/ptt-term) terminal core with direct connection unblocking and integrated media previews. Version **0.2.5** is a test release based on upstream 3.0.3, production commit [`ba7c00d`](https://github.com/ptt/ptt-term/commit/ba7c00d5edff1654bf3cc89994b9dd2d23a072fe).
+PTT in a Chrome tab, using the current [ptt/ptt-term](https://github.com/ptt/ptt-term) terminal core with direct connection unblocking and integrated media previews. Version **0.2.6** is a test release based on upstream 3.0.3, production commit [`ba7c00d`](https://github.com/ptt/ptt-term/commit/ba7c00d5edff1654bf3cc89994b9dd2d23a072fe).
 
 The original classic interface is preserved separately as [release 0.1.1](https://github.com/bhmagic/ptt-classic/releases/tag/v0.1.1), including its ready-to-load ZIP and complete source. The permanent `archive/classic-0.1.1` branch also preserves that version.
 
 ## Install or update
 
-1. Download the ready-to-load `ptt-classic-0.2.5.zip` from the [0.2.5 test release](https://github.com/bhmagic/ptt-classic/releases/tag/v0.2.5) and extract it. GitHub's automatic Source code ZIP is not an installable extension.
+1. Download the ready-to-load `ptt-classic-0.2.6.zip` from the [0.2.6 test release](https://github.com/bhmagic/ptt-classic/releases/tag/v0.2.6) and extract it. GitHub's automatic Source code ZIP is not an installable extension.
 2. Open `chrome://extensions`, enable Developer mode, and load the folder containing `manifest.json`. A local build writes to `dist/ptt-classic`.
 3. For an existing installation, log out of PTT, replace its folder with the new package, click Reload on the extension card, and refresh the terminal tab. If using this checkout's existing `dist/ptt-classic` installation, the build already updates that folder.
 4. Click the PTT Classic extension icon to open the terminal.
 
 The fixed extension ID and bookmark remain `chrome-extension://gpephnjkgejlfddpjkgkeiffflnnkekg/index.html`. The upgrade preserves saved preferences, maps the old margin and preview settings, and stores a copy of the original settings before migration. No local server or additional extension is needed.
+
+## GIF previews in 0.2.6
+
+Imgur GIF links remain animated images instead of being rewritten to MP4 players. This includes direct GIF URLs, GIFs resolved from extensionless links, and GIF items in albums. They animate without a play button, preserve the original URL and query, and follow the image size limits. Actual MP4 album items retain playback controls. A live check of the reported `6V0tytz.gif` confirmed HTTP 200 with `image/gif`, successful hover and inline rendering at its natural 728 × 410 dimensions, and no MP4 request.
 
 ## Media sizing in 0.2.5
 
